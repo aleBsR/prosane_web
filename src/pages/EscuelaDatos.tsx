@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { useBlocker, useNavigate, useParams } from 'react-router-dom';
 import { v1Api, apiErrorMessage } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
-import { AppButton, AppCard, Field, MIcon, PageHeader, SelectInput, TextInput, useToast } from '../components/ui';
+import { AppButton, AppCard, Field, MIcon, Modal, PageHeader, SelectInput, TextInput, useToast } from '../components/ui';
 
 // Etiquetas espejo de escuela_datos_screen.dart.
 const SINO: Record<string, string> = { SI: 'Sí', NO: 'No', NO_SABE: 'No sabe' };
@@ -37,12 +37,62 @@ const PERC_IMC: Record<string, string> = {
 const AUDIO: Record<string, string> = { pasa: 'Pasa', no_pasa: 'No pasa' };
 const SALUD_BUCAL: Record<string, string> = { con_hallazgos: 'Con hallazgos', sin_hallazgos: 'Sin hallazgos', no_eval: 'No evaluado' };
 const HALLAZGO_LABELS: Record<string, string> = {
-  piel: 'Piel', partes_blandas: 'Partes blandas', cardiovascular: 'Cardiovascular',
-  respiratorio: 'Respiratorio', abdominal: 'Abdominal', genitourinario: 'Genitourinario',
+  piel: 'Piel y faneras', partes_blandas: 'Partes blandas', cardiovascular: 'Cardiovascular',
+  respiratorio: 'Respiratorio', abdominal: 'Abdominal',
+  genitourinario_ninos: 'Genitourinario (Niños)', genitourinario_ninas: 'Genitourinario (Niñas)',
   osteoarticular: 'Osteoarticular', neurologico: 'Neurológico', salud_visual: 'Salud visual',
-  fonoaudiologica: 'Fonoaudiológica', icv: 'ICV',
+  salud_fonoaudiologica: 'Salud fonoaudiológica', icv: 'ICV',
+  genitourinario: 'Genitourinario', fonoaudiologica: 'Fonoaudiológica',
 };
-const SISTEMAS = Object.keys(HALLAZGO_LABELS);
+const SISTEMAS = [
+  'piel', 'partes_blandas', 'cardiovascular', 'respiratorio', 'abdominal',
+  'genitourinario_ninos', 'genitourinario_ninas', 'osteoarticular', 'neurologico',
+  'salud_visual', 'salud_fonoaudiologica', 'icv', 'genitourinario', 'fonoaudiologica',
+];
+const HALLAZGO_CHECK_LABELS: Record<string, Record<string, string>> = {
+  piel: {
+    nevo_derivacion: 'Nevos con criterio de derivación (Asimetría, bordes, color, diámetro, evolución)',
+    escabiosis: 'Escabiosis', piodermitis: 'Piodermitis', pediculosis: 'Pediculosis', otro: 'Otro',
+  },
+  partes_blandas: {
+    adenomegalia_localizada: 'Adenomegalia localizada',
+    adenomegalias_generalizada: 'Adenomegalias generalizadas', otro: 'Otro',
+  },
+  cardiovascular: {
+    presion_elevada: 'Presión arterial elevada',
+    pulso_alterado: 'Ausencia o alteración del pulso humeral, radial o femoral (uni o bilateral)',
+    soplo: 'Soplo', arritmia: 'Arritmia', otro: 'Otro',
+  },
+  respiratorio: {
+    hallazgo_auscultatorio: 'Hallazgo auscultatorio', respiracion_bucal: 'Respiración bucal', otro: 'Otro',
+  },
+  abdominal: {
+    hepatomegalia: 'Hepatomegalia', masa_palpable: 'Masa palpable', esplenomegalia: 'Esplenomegalia',
+    hernias: 'Hernias', otro: 'Otro',
+  },
+  genitourinario_ninos: {
+    pubertad_precoz: 'Signos de pubertad precoz (en niños menores de 9 años)',
+    testiculo_no_descendido: 'Testículo/s no descendido/s', hernia: 'Hernia', fimosis: 'Fimosis',
+    asimetria_testicular: 'Asimetría testicular', varicocele: 'Varicocele', otro: 'Otro',
+  },
+  genitourinario_ninas: {
+    pubertad_precoz: 'Signos de pubertad precoz (en niñas menores de 8 años)', otro: 'Otro',
+  },
+  osteoarticular: {
+    adams_positiva: 'Maniobra de Adams positiva', alteracion_marcha: 'Alteraciones de la marcha', otro: 'Otro',
+  },
+  neurologico: {
+    paresias_focales: 'Paresias o signos focales', movimientos_anormales: 'Movimientos anormales', otro: 'Otro',
+  },
+  salud_visual: {
+    disminucion_agudeza: 'Disminución de agudeza visual', estrabismo: 'Estrabismo',
+    posicion_cabeza: 'Posición anormal de la cabeza', ojo_externo: 'Alteraciones del ojo externo', otro: 'Otro',
+  },
+  salud_fonoaudiologica: {
+    audiometria_no_pasa: "'No pasa' Audiometría/barrido tonal",
+    alteracion_lenguaje: 'Alteraciones en el lenguaje, habla y/o comunicación', otro: 'Otro',
+  },
+};
 const DERIV_LABELS: Record<string, string> = {
   odontologia: 'Odontología', oftalmologia: 'Oftalmología', nutricion: 'Nutrición',
   neurologia: 'Neurología', cardiologia: 'Cardiología', fonoaudiologia: 'Fonoaudiología',
@@ -78,7 +128,7 @@ function Fila({ label, valor }: { label: string; valor: any }) {
   const v = txt(valor);
   return (
     <div style={{ display: 'flex', gap: 8, paddingBottom: 6, fontSize: 12 }}>
-      <span style={{ width: 170, flexShrink: 0, color: 'rgba(45,45,58,.7)' }}>{label}</span>
+      <span style={{ width: 170, flexShrink: 0, color: 'var(--texto-suave)' }}>{label}</span>
       <span style={{ fontWeight: 600 }}>{v === '' ? '—' : v}</span>
     </div>
   );
@@ -109,15 +159,46 @@ export default function EscuelaDatos() {
   const [noEditable, setNoEditable] = useState(true);
   const [raw, setRaw] = useState<any>(null);
   const [f, setF] = useState<any>({});
+  const [paso, setPaso] = useState(0);
+  // Sección escuela (paso 3): se carga junto pero solo se guarda si se visita.
+  const [ePreocupa, setEPreocupa] = useState(false);
+  const [eDetalle, setEDetalle] = useState('');
+  const [eLenguaje, setELenguaje] = useState(false);
+  const [eTratamiento, setETratamiento] = useState(false);
+  const [eVisitado, setEVisitado] = useState(false);
+  // Firma de lo último persistido para el dirty guard.
+  const firmaGuardada = useRef('');
+
+  // Pasos del wizard (A en 3 partes + E + revisión). Mismo orden que la app.
+  const TITULOS_PASOS = [
+    'Datos del niño', 'Domicilio y cobertura', 'Antecedentes',
+    'Sección escuela', 'Revisión',
+  ];
 
   const set = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }));
+  const setPreocupa = (v: boolean) => {
+    setEPreocupa(v);
+    if (!v) setEDetalle('');
+  };
+
+  // Firma del estado para detectar cambios sin guardar (dirty guard).
+  function firmaActual(): string {
+    return JSON.stringify({
+      f, ePreocupa, eDetalle, eLenguaje, eTratamiento,
+    });
+  }
+  function marcarGuardado() {
+    firmaGuardada.current = firmaActual();
+  }
+  const tieneCambios = firmaActual() !== firmaGuardada.current;
 
   useEffect(() => {
     (async () => {
       try {
-        const [op, datos] = await Promise.all([
+        const [op, datos, seccion] = await Promise.all([
           v1Api.get(`/operativos/${opId}/`),
           v1Api.get(`/operativos/${opId}/alumnos/${alumnoId}/datos/`),
+          v1Api.get(`/operativos/${opId}/alumnos/${alumnoId}/seccion-escuela/`).catch(() => ({ data: {} })),
         ]);
         const bloqueado = op.data.estado === 'finalizado' || op.data.estado === 'cancelado';
         const puede = can('cargarAntecedentesNino') || usuario?.rolName === 'superadmin';
@@ -141,6 +222,35 @@ export default function EscuelaDatos() {
           ultima_consulta_medica: d.antecedentes?.ultima_consulta_medica ?? 'NINGUNA',
           otros_problemas_salud: d.antecedentes?.otros_problemas_salud ?? '',
         });
+        const sec = seccion.data ?? {};
+        const preocupa = !!sec.escuela_preocupa_salud;
+        const detalle = preocupa ? (sec.escuela_preocupa_detalle ?? '') : '';
+        setEPreocupa(preocupa);
+        setEDetalle(detalle);
+        setELenguaje(!!sec.escuela_dificultad_lenguaje);
+        setETratamiento(!!sec.escuela_bajo_tratamiento);
+        firmaGuardada.current = JSON.stringify({
+          f: {
+            nombre: d.persona?.nombre ?? d.operativo_alumno?.nombre ?? '',
+            apellido: d.persona?.apellido ?? d.operativo_alumno?.apellido ?? '',
+            dni: d.persona?.dni ?? d.operativo_alumno?.dni ?? '',
+            sexo: d.persona?.sexo ?? d.operativo_alumno?.sexo ?? '',
+            fecha_nacimiento: (d.persona?.fecha_nacimiento ?? d.operativo_alumno?.fecha_nacimiento ?? '').slice(0, 10),
+            edad: d.paciente?.edad ?? '',
+            celular: d.paciente?.celular ?? '',
+            tipo_cobertura: d.paciente?.tipo_cobertura ?? '',
+            nombre_cobertura: d.paciente?.nombre_cobertura ?? '',
+            localidad: d.domicilio?.localidad ?? '',
+            nacio_prematuro: d.antecedentes?.nacio_prematuro ?? 'NO',
+            peso_nacimiento: d.antecedentes?.peso_nacimiento ?? '',
+            asma_espasmos: d.antecedentes?.asma_espasmos ?? 'NO',
+            ultima_consulta_medica: d.antecedentes?.ultima_consulta_medica ?? 'NINGUNA',
+            otros_problemas_salud: d.antecedentes?.otros_problemas_salud ?? '',
+          },
+          ePreocupa: preocupa, eDetalle: detalle,
+          eLenguaje: !!sec.escuela_dificultad_lenguaje,
+          eTratamiento: !!sec.escuela_bajo_tratamiento,
+        });
       } catch (e) {
         toast.push('error', apiErrorMessage(e, 'No se pudo cargar'));
       } finally {
@@ -150,10 +260,87 @@ export default function EscuelaDatos() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opId, alumnoId]);
 
+  // Valida la sección actual (Siguiente bloqueante). Solo el paso 0
+  // (datos del niño) tiene obligatorios.
+  function validarPaso(p: number): string | null {
+    if (p !== 0) return null;
+    if (!String(f.nombre ?? '').trim() || !String(f.apellido ?? '').trim() ||
+        !String(f.dni ?? '').trim()) {
+      return 'Nombre, apellido y DNI son obligatorios';
+    }
+    if (!String(f.fecha_nacimiento ?? '').trim()) {
+      return 'Seleccioná la fecha de nacimiento';
+    }
+    return null;
+  }
+
+  // Intenta avanzar validando la sección actual y persistiendo el avance
+  // (autoguardado al Siguiente). Si falla la red se queda en el paso.
+  // Al salir del paso E se incluye su guardado aunque sea la primera visita.
+  async function intentarAvanzar() {
+    const msg = validarPaso(paso);
+    if (msg) {
+      toast.push('error', msg);
+      return;
+    }
+    const eAhora = eVisitado || paso === 3;
+    if (paso === 3 && !eVisitado) setEVisitado(true);
+    const ok = await guardarAvanceConE(eAhora);
+    if (ok) setPaso(Math.min(paso + 1, 4));
+  }
+
+  function irAPaso(i: number) {
+    if (i === 3) setEVisitado(true);
+    setPaso(Math.max(0, Math.min(i, 4)));
+  }
+
   async function guardar() {
+    const msg = validarPaso(0);
+    if (msg) {
+      toast.push('error', msg);
+      setPaso(0);
+      return;
+    }
+    await enviar(false, 'Datos personales y familia guardados ✓ (A)', true, eVisitado);
+  }
+
+  // Guarda el avance sin validar todo ni marcar completado.
+  // Devuelve si persistió (para el autoguardado al Siguiente).
+  async function guardarAvanceConE(eIncluirE: boolean): Promise<boolean> {
+    return enviar(true, 'Avance guardado', false, eIncluirE);
+  }
+
+  async function enviar(parcial: boolean, okMsg: string, completar: boolean, eIncluirE: boolean): Promise<boolean> {
     setSaving(true);
     try {
       await v1Api.patch(`/operativos/${opId}/alumnos/${alumnoId}/datos/`, {
+        ...payload(),
+        completar,
+      });
+      // La sección E solo se guarda si se visitó (paso 3).
+      if (eIncluirE) {
+        await v1Api.patch(`/operativos/${opId}/alumnos/${alumnoId}/seccion-escuela/`, {
+          escuela_preocupa_salud: ePreocupa,
+          escuela_preocupa_detalle: ePreocupa ? eDetalle : '',
+          escuela_dificultad_lenguaje: eLenguaje,
+          escuela_bajo_tratamiento: eTratamiento,
+          completar,
+        });
+      }
+      marcarGuardado();
+      if (!parcial) toast.push('ok', okMsg);
+      if (!parcial) nav(`/operativos/${opId}/alumnos/${alumnoId}`);
+      return true;
+    } catch (e) {
+      toast.push('error', apiErrorMessage(e, 'No se pudo guardar'));
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function payload() {
+    return {
         ...f,
         antecedentes: {
           nacio_prematuro: f.nacio_prematuro,
@@ -162,15 +349,12 @@ export default function EscuelaDatos() {
           otros_problemas_salud: f.otros_problemas_salud,
           ultima_consulta_medica: f.ultima_consulta_medica,
         },
-      });
-      toast.push('ok', 'Datos personales y familia guardados ✓ (A)');
-      nav(`/operativos/${opId}/alumnos/${alumnoId}`);
-    } catch (e) {
-      toast.push('error', apiErrorMessage(e, 'No se pudo guardar'));
-    } finally {
-      setSaving(false);
-    }
+      };
   }
+
+  // Bloquea salidas (botón atrás, links, recarga) con cambios sin guardar.
+  // NOTA: los hooks siempre antes de cualquier return anticipado.
+  const blocker = useBlocker(tieneCambios && !noEditable && !loading);
 
   if (loading) return <AppCard>Cargando…</AppCard>;
   const ro = noEditable;
@@ -181,6 +365,9 @@ export default function EscuelaDatos() {
   const ant = raw?.antecedentes ?? null;
   const em = raw?.evaluacion_medica ?? null;
   const eo = raw?.evaluacion_odontologica ?? null;
+  const fam = raw?.antecedente_familiar ?? null;
+  const consent = raw?.consentimiento ?? null;
+  const tutor = raw?.tutor ?? null;
 
   const fichaDatos = (
     <AppCard>
@@ -233,6 +420,28 @@ export default function EscuelaDatos() {
     </AppCard>
   ) : null;
 
+  const tutorNom = `${tutor?.nombre ?? ''} ${tutor?.apellido ?? ''}`.trim();
+  const fichaFamilia = (fam || consent || tutor) ? (
+    <AppCard>
+      <TituloFicha icono="family_restroom" titulo="Familia y consentimiento" />
+      {(tutorNom || tutor?.parentesco) && (
+        <Fila
+          label="Responsable"
+          valor={[tutorNom, tutor?.parentesco ? `(${tutor.parentesco})` : '', tutor?.dni ? `DNI ${tutor.dni}` : ''].filter(Boolean).join(' ')}
+        />
+      )}
+      {consent && (
+        <Fila label="Consentimiento" valor={consent.aceptado ? 'Aceptado' : 'Pendiente'} />
+      )}
+      {fam?.problemas_salud === 'SI' && (
+        <Fila label="Ant. familiares" valor={fam.detalle_problema_salud || 'Sí'} />
+      )}
+      {fam?.familiar_con_muerte_subita === 'SI' && (
+        <Fila label="Muerte súbita familiar" valor="Sí" />
+      )}
+    </AppCard>
+  ) : null;
+
   const hallazgoFilas = () => {
     const h = em?.hallazgos ?? {};
     const filas = [];
@@ -241,12 +450,16 @@ export default function EscuelaDatos() {
       if (!item || typeof item !== 'object') continue;
       const estado = txt(item.estado);
       const detalle = txt(item.detalle);
-      if ((estado === '' || estado === 'no_eval') && detalle === '') continue;
+      const labels = HALLAZGO_CHECK_LABELS[s] ?? {};
+      const checks = Array.isArray(item.checks)
+        ? item.checks.map((c: any) => labels[String(c)] ?? String(c)).filter((x: string) => x !== '')
+        : [];
+      if ((estado === '' || estado === 'no_eval') && detalle === '' && checks.length === 0) continue;
       filas.push(
         <Fila
           key={s}
-          label={HALLAZGO_LABELS[s]}
-          valor={[estado !== '' ? mapVal({ con: 'Con hallazgos', sin: 'Sin hallazgos', no_eval: 'No evaluado' }, estado) : '', detalle !== '' ? detalle : ''].filter(Boolean).join(' — ')}
+          label={HALLAZGO_LABELS[s] ?? s}
+          valor={[estado !== '' ? mapVal({ con: 'Con hallazgos', sin: 'Sin hallazgos', no_eval: 'No evaluado' }, estado) : '', ...checks, detalle !== '' ? detalle : ''].filter(Boolean).join(' — ')}
         />,
       );
     }
@@ -345,19 +558,59 @@ export default function EscuelaDatos() {
   return (
     <div>
       <PageHeader title="Datos del alumno" backTo={`/operativos/${opId}/alumnos/${alumnoId}`} />
+      {blocker.state === 'blocked' && (
+        <Modal
+          title="Salir sin guardar?"
+          saveLabel="Salir"
+          cancelLabel="Seguir editando"
+          onSave={() => blocker.proceed()}
+          onCancel={() => blocker.reset()}
+        >
+          <p style={{ fontSize: 14 }}>Tenés cambios sin guardar. Si salís ahora se pierden.</p>
+        </Modal>
+      )}
       {ro ? (
         <>
           {ro && <div className="info-box ok">Solo lectura</div>}
           {fichaDatos}
           {fichaCobertura}
           {fichaAntecedentes}
+          {fichaFamilia}
           {fichaEvalMedica}
           {fichaEvalOdonto}
         </>
       ) : (
         <>
           <AppCard>
-            <h3>Datos personales y familia (A)</h3>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>
+              Paso {Math.min(paso, 4) + 1} de 5 · {TITULOS_PASOS[Math.min(paso, 4)]}
+            </div>
+            <div style={{ height: 8, background: 'rgba(0,0,0,.08)', borderRadius: 4, margin: '8px 0' }}>
+              <div style={{ width: `${((Math.min(paso, 4) + 1) / 5) * 100}%`, height: '100%', background: 'var(--primario)', borderRadius: 4 }} />
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {TITULOS_PASOS.map((t, i) => (
+                <button
+                  key={t}
+                  type="button"
+                  title={t}
+                  onClick={() => irAPaso(i)}
+                  style={{
+                    width: 26, height: 26, borderRadius: '50%', border: 'none', cursor: 'pointer',
+                    fontSize: 12, fontWeight: 700,
+                    background: i === paso ? 'var(--primario)' : 'rgba(0,0,0,.08)',
+                    color: i === paso ? '#fff' : 'inherit',
+                  }}
+                >
+                  {i + 1}
+                </button>
+              ))}
+            </div>
+          </AppCard>
+          <div style={{ height: 12 }} />
+          {paso === 0 && (
+          <AppCard>
+            <h3>Datos del niño</h3>
             <Field label="Nombre *"><TextInput value={f.nombre ?? ''} onChange={(e) => set('nombre', e.target.value)} /></Field>
             <Field label="Apellido *"><TextInput value={f.apellido ?? ''} onChange={(e) => set('apellido', e.target.value)} /></Field>
             <Field label="DNI *"><TextInput value={f.dni ?? ''} onChange={(e) => set('dni', e.target.value)} /></Field>
@@ -371,6 +624,12 @@ export default function EscuelaDatos() {
               </SelectInput>
             </Field>
             <Field label="Edad"><TextInput type="number" value={f.edad ?? ''} onChange={(e) => set('edad', e.target.value)} /></Field>
+          </AppCard>
+          )}
+
+          {paso === 1 && (
+          <AppCard>
+            <h3>Domicilio y cobertura</h3>
             <Field label="Celular de contacto"><TextInput value={f.celular ?? ''} onChange={(e) => set('celular', e.target.value)} /></Field>
             <Field label="Cobertura">
               <SelectInput value={f.tipo_cobertura ?? ''} onChange={(e) => set('tipo_cobertura', e.target.value)}>
@@ -383,6 +642,11 @@ export default function EscuelaDatos() {
             </Field>
             <Field label="Nombre cobertura"><TextInput value={f.nombre_cobertura ?? ''} onChange={(e) => set('nombre_cobertura', e.target.value)} /></Field>
             <Field label="Localidad"><TextInput value={f.localidad ?? ''} onChange={(e) => set('localidad', e.target.value)} /></Field>
+          </AppCard>
+          )}
+
+          {paso === 2 && (
+          <AppCard>
             <h3>Antecedentes personales</h3>
             <Field label="Nació prematuro">
               <SelectInput value={f.nacio_prematuro ?? 'NO'} onChange={(e) => set('nacio_prematuro', e.target.value)}>
@@ -404,10 +668,71 @@ export default function EscuelaDatos() {
               </SelectInput>
             </Field>
             <Field label="Otros problemas de salud"><TextInput value={f.otros_problemas_salud ?? ''} onChange={(e) => set('otros_problemas_salud', e.target.value)} /></Field>
-            <AppButton label="Guardar datos" loading={saving} onClick={guardar} />
           </AppCard>
-          {fichaEvalMedica}
-          {fichaEvalOdonto}
+          )}
+
+          {paso === 3 && (
+          <AppCard>
+            <h3>Sección escuela (E)</h3>
+            <Field label="¿Preocupa su salud?">
+              <SelectInput value={ePreocupa ? 'true' : 'false'} onChange={(e) => setPreocupa(e.target.value === 'true')}>
+                <option value="false">No</option>
+                <option value="true">Sí</option>
+              </SelectInput>
+            </Field>
+            {ePreocupa && (
+              <Field label="Detalle de la preocupación">
+                <TextInput value={eDetalle} onChange={(e) => setEDetalle(e.target.value)} />
+              </Field>
+            )}
+            <Field label="¿Dificultad de lenguaje?">
+              <SelectInput value={eLenguaje ? 'true' : 'false'} onChange={(e) => setELenguaje(e.target.value === 'true')}>
+                <option value="false">No</option>
+                <option value="true">Sí</option>
+              </SelectInput>
+            </Field>
+            <Field label="¿Bajo tratamiento?">
+              <SelectInput value={eTratamiento ? 'true' : 'false'} onChange={(e) => setETratamiento(e.target.value === 'true')}>
+                <option value="false">No</option>
+                <option value="true">Sí</option>
+              </SelectInput>
+            </Field>
+          </AppCard>
+          )}
+
+          {paso === 4 && (
+          <AppCard>
+            <h3>Revisión</h3>
+            {['Datos del niño', 'Domicilio y cobertura', 'Antecedentes', 'Sección escuela'].map((t, i) => (
+              <div
+                key={t}
+                onClick={() => irAPaso(i)}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', cursor: 'pointer' }}
+              >
+                <span style={{ color: 'green' }}>✓</span>
+                <span style={{ flex: 1, fontSize: 13 }}>{t}</span>
+                <span style={{ color: '#999' }}>›</span>
+              </div>
+            ))}
+          </AppCard>
+          )}
+
+          {paso === 4 && fichaEvalMedica}
+          {paso === 4 && fichaEvalOdonto}
+
+          <div style={{ height: 12 }} />
+          <AppCard>
+          <div className="wizard-nav">
+            {paso > 0 && (
+              <AppButton label="Atrás" secondary onClick={() => irAPaso(paso - 1)} />
+            )}
+            {paso < 4 ? (
+              <AppButton label="Siguiente" loading={saving} onClick={intentarAvanzar} />
+            ) : (
+              <AppButton label="Guardar" loading={saving} onClick={guardar} />
+            )}
+          </div>
+          </AppCard>
         </>
       )}
     </div>

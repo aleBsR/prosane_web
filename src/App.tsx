@@ -1,8 +1,9 @@
-import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
+import { Navigate, Outlet, createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { ToastProvider } from './components/ui';
 import Layout from './components/Layout';
 import Login from './pages/Login';
+import Signup from './pages/Signup';
 import ForceChangePassword from './pages/ForceChangePassword';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
@@ -10,6 +11,7 @@ import Acciones from './pages/Acciones';
 import Operativos from './pages/Operativos';
 import OperativoDetail from './pages/OperativoDetail';
 import AlumnoDetail from './pages/AlumnoDetail';
+import Derivaciones from './pages/Derivaciones';
 import EvaluacionMedica from './pages/EvaluacionMedica';
 import EvaluacionOdontologica from './pages/EvaluacionOdontologica';
 import SeccionEscuela from './pages/SeccionEscuela';
@@ -20,14 +22,16 @@ import EscuelaDetail from './pages/EscuelaDetail';
 import Cursos from './pages/Cursos';
 import MiEscuela from './pages/MiEscuela';
 import AlumnosEscuela from './pages/AlumnosEscuela';
+import AlumnoEscuelaDetail from './pages/AlumnoEscuelaDetail';
 import Profesionales from './pages/Profesionales';
-import { UsuariosAyudantes, UsuariosEscuela } from './pages/Usuarios';
+import { UsuariosAdministrativos, UsuariosEscuela } from './pages/Usuarios';
+import Auditoria from './pages/Auditoria';
 import Perfil from './pages/Perfil';
 import Configuracion from './pages/Configuracion';
 import ConfigDatos from './pages/ConfigDatos';
 import ConfigPassword from './pages/ConfigPassword';
 import Pendientes from './pages/Pendientes';
-import { EscuelaCreate, GestionUsuarios, OperativoCreate, TutorFueraDeAlcance } from './pages/Altas';
+import { EscuelaCreate, OperativoCreate, TutorFueraDeAlcance } from './pages/Altas';
 
 // Espejo de app_router.dart:
 // - sin sesión → /login (salvo rutas públicas de auth)
@@ -56,57 +60,73 @@ function PublicOnly() {
   return <Outlet />;
 }
 
+// Data router (necesario para useBlocker del dirty guard en los wizards).
+const router = createBrowserRouter([
+  {
+    element: <PublicOnly />,
+    children: [
+      { path: '/login', element: <Login /> },
+      { path: '/signup', element: <Signup /> },
+      { path: '/forgot-password', element: <ForgotPassword /> },
+      { path: '/reset-password', element: <ResetPassword /> },
+    ],
+  },
+  {
+    element: <RequireChangePassword />,
+    children: [
+      { path: '/change-password', element: <ForceChangePassword /> },
+    ],
+  },
+  {
+    element: <RequireAuth />,
+    children: [
+      {
+        element: <Layout />,
+        children: [
+          { path: '/inicio', element: <Acciones /> },
+          { path: '/pendientes', element: <Pendientes /> },
+          { path: '/usuario', element: <Perfil /> },
+          { path: '/usuario/configuracion', element: <Configuracion /> },
+          { path: '/usuario/configuracion/datos', element: <ConfigDatos /> },
+          { path: '/usuario/configuracion/password', element: <ConfigPassword /> },
+          { path: '/operativos', element: <Operativos /> },
+          { path: '/operativos/nuevo', element: <OperativoCreate /> },
+          { path: '/operativos/:id', element: <OperativoDetail /> },
+          { path: '/operativos/:id/derivaciones', element: <Derivaciones /> },
+          { path: '/operativos/:opId/alumnos/:alumnoId', element: <AlumnoDetail /> },
+          { path: '/operativos/:opId/alumnos/:alumnoId/medica', element: <EvaluacionMedica /> },
+          { path: '/operativos/:opId/alumnos/:alumnoId/odontologica', element: <EvaluacionOdontologica /> },
+          { path: '/operativos/:opId/alumnos/:alumnoId/escuela', element: <SeccionEscuela /> },
+          { path: '/operativos/:opId/alumnos/:alumnoId/datos', element: <EscuelaDatos /> },
+          { path: '/operativos/:opId/alumnos/:alumnoId/constancia', element: <Constancia /> },
+          { path: '/escuelas', element: <Escuelas /> },
+          { path: '/escuelas/nuevo', element: <EscuelaCreate /> },
+          { path: '/escuelas/mi-escuela', element: <MiEscuela /> },
+          { path: '/escuelas/alumnos', element: <AlumnosEscuela /> },
+          { path: '/escuelas/alumnos/:alumnoId', element: <AlumnoEscuelaDetail /> },
+          { path: '/escuelas/:escuelaId', element: <EscuelaDetail /> },
+          { path: '/escuelas/:escuelaId/cursos', element: <Cursos /> },
+          { path: '/escuelas/:escuelaId/alumnos', element: <AlumnosEscuela /> },
+          { path: '/profesionales', element: <Profesionales /> },
+          { path: '/usuarios-escuela', element: <UsuariosEscuela /> },
+          { path: '/usuarios-administrativos', element: <UsuariosAdministrativos /> },
+          { path: '/auditoria', element: <Auditoria /> },
+          { path: '/hijos', element: <TutorFueraDeAlcance titulo="Mis hijos" /> },
+          { path: '/hijos/nuevo', element: <TutorFueraDeAlcance titulo="Registrar hijo" /> },
+          { path: '/consentimiento', element: <TutorFueraDeAlcance titulo="Consentimiento" /> },
+          { path: '/antecedentes-familiares', element: <TutorFueraDeAlcance titulo="Antecedentes familiares" /> },
+        ],
+      },
+    ],
+  },
+  { path: '*', element: <Navigate to="/login" replace /> },
+]);
+
 export default function App() {
   return (
     <ToastProvider>
       <AuthProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route element={<PublicOnly />}>
-              <Route path="/login" element={<Login />} />
-              <Route path="/forgot-password" element={<ForgotPassword />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
-            </Route>
-            <Route element={<RequireChangePassword />}>
-              <Route path="/change-password" element={<ForceChangePassword />} />
-            </Route>
-            <Route element={<RequireAuth />}>
-              <Route element={<Layout />}>
-                <Route path="/inicio" element={<Acciones />} />
-                <Route path="/pendientes" element={<Pendientes />} />
-                <Route path="/usuario" element={<Perfil />} />
-                <Route path="/usuario/configuracion" element={<Configuracion />} />
-                <Route path="/usuario/configuracion/datos" element={<ConfigDatos />} />
-                <Route path="/usuario/configuracion/password" element={<ConfigPassword />} />
-                <Route path="/operativos" element={<Operativos />} />
-                <Route path="/operativos/nuevo" element={<OperativoCreate />} />
-                <Route path="/operativos/:id" element={<OperativoDetail />} />
-                <Route path="/operativos/:opId/alumnos/:alumnoId" element={<AlumnoDetail />} />
-                <Route path="/operativos/:opId/alumnos/:alumnoId/medica" element={<EvaluacionMedica />} />
-                <Route path="/operativos/:opId/alumnos/:alumnoId/odontologica" element={<EvaluacionOdontologica />} />
-                <Route path="/operativos/:opId/alumnos/:alumnoId/escuela" element={<SeccionEscuela />} />
-                <Route path="/operativos/:opId/alumnos/:alumnoId/datos" element={<EscuelaDatos />} />
-                <Route path="/operativos/:opId/alumnos/:alumnoId/constancia" element={<Constancia />} />
-                <Route path="/escuelas" element={<Escuelas />} />
-                <Route path="/escuelas/nuevo" element={<EscuelaCreate />} />
-                <Route path="/escuelas/mi-escuela" element={<MiEscuela />} />
-                <Route path="/escuelas/alumnos" element={<AlumnosEscuela />} />
-                <Route path="/escuelas/:escuelaId" element={<EscuelaDetail />} />
-                <Route path="/escuelas/:escuelaId/cursos" element={<Cursos />} />
-                <Route path="/escuelas/:escuelaId/alumnos" element={<AlumnosEscuela />} />
-                <Route path="/profesionales" element={<Profesionales />} />
-                <Route path="/usuarios-escuela" element={<UsuariosEscuela />} />
-                <Route path="/usuarios-ayudantes" element={<UsuariosAyudantes />} />
-                <Route path="/gestion-usuarios" element={<GestionUsuarios />} />
-                <Route path="/hijos" element={<TutorFueraDeAlcance titulo="Mis hijos" />} />
-                <Route path="/hijos/nuevo" element={<TutorFueraDeAlcance titulo="Registrar hijo" />} />
-                <Route path="/consentimiento" element={<TutorFueraDeAlcance titulo="Consentimiento" />} />
-                <Route path="/antecedentes-familiares" element={<TutorFueraDeAlcance titulo="Antecedentes familiares" />} />
-              </Route>
-            </Route>
-            <Route path="*" element={<Navigate to="/login" replace />} />
-          </Routes>
-        </BrowserRouter>
+        <RouterProvider router={router} />
       </AuthProvider>
     </ToastProvider>
   );

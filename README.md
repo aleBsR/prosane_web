@@ -39,12 +39,13 @@ cd prosane_web
 npm install
 ```
 
-### 3. Configurar la URL del backend (`.env`)
+### 3. Configurar la URL del backend (`.env.local`)
 
-La URL del backend se configura con la variable `VITE_API_AUTH_URL`. Copiá el ejemplo:
+La URL del backend se configura con la variable `VITE_API_AUTH_URL` en un
+archivo `.env.local` (ignorado por git, una vez por PC). Copiá el ejemplo:
 
 ```bash
-cp .env.example .env
+cp .env.example .env.local
 ```
 
 | Dónde corre el backend | `VITE_API_AUTH_URL` |
@@ -67,6 +68,7 @@ npm run build            # compilar a producción (sale en dist/)
 ```
 
 > El `VITE_API_AUTH_URL` queda fijo al iniciar Vite: si cambiás de red, actualizalo y reiniciá el servidor de desarrollo.
+> Si además exportás la variable en la terminal, la terminal gana sobre el archivo: usá una sola fuente (el archivo, salvo testeo ngrok).
 
 ---
 
@@ -112,7 +114,7 @@ python manage.py runserver 0.0.0.0:8000
 | `superadmin@prosane.test` | Superadmin — acceso total |
 | `medico@prosane.test` | Médico |
 | `odontologo@prosane.test` | Odontólogo |
-| `ayudante@prosane.test` | Ayudante — gestión de operativos |
+| `administrativo@prosane.test` | Administrativo — gestión de operativos |
 | `tutor@prosane.test` | Tutor — registro de hijos |
 
 Cada rol ve sus propias acciones en el menú, definidas por el sistema de permisos data-driven.
@@ -147,7 +149,7 @@ src/
 │   ├── EvaluacionMedica, EvaluacionOdontologica (con odontograma SVG),
 │   │   SeccionEscuela, EscuelaDatos (ficha completa), Constancia
 │   ├── Escuelas, EscuelaDetail (post), Cursos, MiEscuela, AlumnosEscuela
-│   └── Profesionales, Usuarios (escuela/ayudantes), Altas
+│   └── Profesionales, Usuarios (escuela/administrativos), Altas
 └── App.tsx            → Router con guardias (RequireAuth/RequireChangePassword)
 ```
 

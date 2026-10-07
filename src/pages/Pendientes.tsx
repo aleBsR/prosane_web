@@ -28,7 +28,7 @@ export default function Pendientes() {
                   <div style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {it.titulo}
                   </div>
-                  <div style={{ fontSize: 12, color: 'rgba(45,45,58,.6)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div style={{ fontSize: 12, color: 'var(--texto-suave)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {it.subtitulo}
                   </div>
                 </div>

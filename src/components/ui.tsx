@@ -95,6 +95,56 @@ export function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} />;
 }
 
+// ---------- PasswordInput (ojo mostrar/ocultar, espejo de AppTextField isPassword) ----------
+
+export function PasswordInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div className="password-wrap">
+      <input {...props} type={visible ? 'text' : 'password'} />
+      <button
+        type="button"
+        className="password-eye"
+        aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+        onClick={() => setVisible((v) => !v)}
+      >
+        <MIcon name={visible ? 'visibility' : 'visibility_off'} size={22} />
+      </button>
+    </div>
+  );
+}
+
+// ---------- AppSwitch (Recordarme, espejo de app_switch.dart: fila tappable) ----------
+
+export function AppSwitch({
+  value,
+  onChanged,
+  label,
+}: {
+  value: boolean;
+  onChanged: (v: boolean) => void;
+  label?: string;
+}) {
+  return (
+    <div className="switch-row" onClick={() => onChanged(!value)}>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={value}
+        aria-label={label ?? 'Recordarme'}
+        className={`switch${value ? ' switch-on' : ''}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onChanged(!value);
+        }}
+      >
+        <span className="switch-thumb" />
+      </button>
+      {label && <span className="switch-label">{label}</span>}
+    </div>
+  );
+}
+
 export function SelectInput(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return <select {...props} />;
 }
@@ -115,6 +165,7 @@ export function Modal({
   children,
   error,
   saveLabel = 'Guardar',
+  cancelLabel = 'Cancelar',
   saving,
   canSave = true,
   onSave,
@@ -124,6 +175,7 @@ export function Modal({
   children: ReactNode;
   error?: string | null;
   saveLabel?: string;
+  cancelLabel?: string;
   saving?: boolean;
   canSave?: boolean;
   onSave: () => void;
@@ -136,10 +188,9 @@ export function Modal({
           <h2 style={{ fontSize: 20, marginBottom: 16 }}>{title}</h2>
           {children}
           {error && <div className="form-error">{error}</div>}
-          <div style={{ marginTop: 8 }}>
+          <div className="modal-actions-row" style={{ marginTop: 8 }}>
+            <AppButton label={cancelLabel} secondary onClick={onCancel} />
             <AppButton label={saveLabel} loading={saving} disabled={!canSave} onClick={onSave} />
-            <div style={{ height: 8 }} />
-            <AppButton label="Cancelar" secondary onClick={onCancel} />
           </div>
         </div>
       </div>
@@ -194,7 +245,9 @@ export function PostCard({
   menuEntries = [],
   onMenuSelected,
   bannerIcon,
+  bannerTop,
   bannerChips = [],
+  bannerBottom,
   body,
   actions,
 }: {
@@ -205,7 +258,9 @@ export function PostCard({
   menuEntries?: PostMenuEntry[];
   onMenuSelected?: (value: string) => void;
   bannerIcon?: string;
-  bannerChips?: string[];
+  bannerTop?: ReactNode;
+  bannerChips?: ReactNode[];
+  bannerBottom?: ReactNode;
   body?: ReactNode;
   actions?: ReactNode;
 }) {
@@ -255,22 +310,28 @@ export function PostCard({
           </div>
         )}
       </div>
-      {(bannerIcon || bannerChips.length > 0) && (
+      {(bannerIcon || bannerTop || bannerChips.length > 0 || bannerBottom) && (
         <div className="post-banner">
           {bannerIcon && (
             <div className="post-banner-icon">
               <MIcon name={bannerIcon} />
             </div>
           )}
+          {bannerTop}
           {bannerChips.length > 0 && (
-            <div>
-              {bannerChips.map((c, i) => (
-                <span key={i} className="post-chip">
-                  {c}
-                </span>
-              ))}
+            <div className="banner-chips">
+              {bannerChips.map((c, i) =>
+                typeof c === 'string' ? (
+                  <span key={i} className="post-chip">
+                    {c}
+                  </span>
+                ) : (
+                  <span key={i}>{c}</span>
+                ),
+              )}
             </div>
           )}
+          {bannerBottom && <div className="actions-row">{bannerBottom}</div>}
         </div>
       )}
       {actions && <div className="actions-row">{actions}</div>}

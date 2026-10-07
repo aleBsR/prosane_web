@@ -2,25 +2,42 @@ import axios, { AxiosError } from 'axios';
 import type { AxiosInstance } from 'axios';
 import { apiBaseUrl, apiV1Base } from '../config';
 
-// Tokens en localStorage (la app móvil usa flutter_secure_storage;
-// en web el equivalente es localStorage + "recordarme" opcional).
+// Tokens con modo Recordarme (espejo de TokenStorage móvil):
+// - persistente (default): localStorage, sobrevive al cierre del navegador.
+// - efímero: sessionStorage, se pierde al cerrar la pestaña/ventana.
+// - omitido (refresh de token): conserva el modo actual, sin "subir de nivel"
+//   una sesión efímera a persistente.
 const ACCESS_KEY = 'prosane.access';
 const REFRESH_KEY = 'prosane.refresh';
+let persistente = true;
 
 export const tokenStore = {
   get access() {
-    return localStorage.getItem(ACCESS_KEY);
+    return sessionStorage.getItem(ACCESS_KEY) ?? localStorage.getItem(ACCESS_KEY);
   },
   get refresh() {
-    return localStorage.getItem(REFRESH_KEY);
+    return sessionStorage.getItem(REFRESH_KEY) ?? localStorage.getItem(REFRESH_KEY);
   },
-  save(access: string, refresh: string) {
-    localStorage.setItem(ACCESS_KEY, access);
-    localStorage.setItem(REFRESH_KEY, refresh);
+  save(access: string, refresh: string, recordarme?: boolean) {
+    if (recordarme !== undefined) persistente = recordarme;
+    if (persistente) {
+      sessionStorage.removeItem(ACCESS_KEY);
+      sessionStorage.removeItem(REFRESH_KEY);
+      localStorage.setItem(ACCESS_KEY, access);
+      localStorage.setItem(REFRESH_KEY, refresh);
+    } else {
+      localStorage.removeItem(ACCESS_KEY);
+      localStorage.removeItem(REFRESH_KEY);
+      sessionStorage.setItem(ACCESS_KEY, access);
+      sessionStorage.setItem(REFRESH_KEY, refresh);
+    }
   },
   clear() {
+    persistente = true;
     localStorage.removeItem(ACCESS_KEY);
     localStorage.removeItem(REFRESH_KEY);
+    sessionStorage.removeItem(ACCESS_KEY);
+    sessionStorage.removeItem(REFRESH_KEY);
   },
 };
 

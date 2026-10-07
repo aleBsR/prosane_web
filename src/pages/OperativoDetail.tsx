@@ -1,20 +1,45 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { v1Api, apiErrorMessage } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
-import { AppButton, AppCard, EmptyState, Field, MIcon, Modal, PageHeader, PostCard, SelectInput, TextInput, useToast } from '../components/ui';
+import { AppCard, EmptyState, Field, MIcon, Modal, PageHeader, PostCard, SelectInput, TextInput, useToast } from '../components/ui';
 import { ESTADO_LABEL } from './Operativos';
 
 function contar(n: number, singular: string, plural?: string) {
   return `${n} ${n === 1 ? singular : plural ?? `${singular}s`}`;
 }
 
+type AccionEstado = 'confirmar' | 'iniciar' | 'finalizar' | 'cancelar';
+
+// Textos del modal de confirmación (espejo del móvil). Los botones son
+// Sí/No para que sirva en general sin malinterpretarse.
+const CONFIRMAR_TEXTO: Record<AccionEstado, { titulo: string; mensaje: string }> = {
+  confirmar: {
+    titulo: '¿Confirmar operativo?',
+    mensaje: 'El operativo pasará a Confirmado y quedará listo para iniciar.',
+  },
+  iniciar: {
+    titulo: '¿Iniciar operativo?',
+    mensaje: 'El operativo pasará a En curso y se habilitará la carga de evaluaciones.',
+  },
+  finalizar: {
+    titulo: '¿Finalizar operativo?',
+    mensaje: 'El operativo se cerrará y ya no se podrán cargar evaluaciones.',
+  },
+  cancelar: {
+    titulo: '¿Cancelar operativo?',
+    mensaje: 'El operativo se cancelará. Esta acción no se puede deshacer.',
+  },
+};
+
 // Detalle espejo de operativo_detail_screen.dart: post de cabecera, botones
 // según estado, tarjeta de profesionales, tarjeta de alumnos con buscador,
 // filtro por curso y filas clicables.
 export default function OperativoDetail() {
   const { id } = useParams();
-  const { can } = useAuth();
+  const { can, usuario } = useAuth();
+  const esSuper = usuario?.rolName === 'superadmin';
+  const nav = useNavigate();
   const toast = useToast();
   const [op, setOp] = useState<any>(null);
   const [alumnos, setAlumnos] = useState<any[]>([]);
@@ -27,6 +52,11 @@ export default function OperativoDetail() {
   const [filtroCurso, setFiltroCurso] = useState('Todos');
   const [importando, setImportando] = useState(false);
   const [exportando, setExportando] = useState(false);
+  const [pendiente, setPendiente] = useState<AccionEstado | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({ nombre: '', fecha: '', lugar_realizacion: 'escuela', notas: '' });
+  const [saving, setSaving] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
 
   const puedeImportarCsv = can('importarNominaOperativo');
 
@@ -58,7 +88,7 @@ export default function OperativoDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  async function accionEstado(accion: 'confirmar' | 'iniciar' | 'finalizar' | 'cancelar') {
+  async function accionEstado(accion: AccionEstado) {
     if (!id) return;
     try {
       if (accion === 'cancelar') await v1Api.delete(`/operativos/${id}/`);
@@ -67,6 +97,8 @@ export default function OperativoDetail() {
       cargar();
     } catch (e) {
       toast.push('error', apiErrorMessage(e, 'No se pudo cambiar el estado'));
+    } finally {
+      setPendiente(null);
     }
   }
 
@@ -92,6 +124,56 @@ export default function OperativoDetail() {
       cargar();
     } catch (e) {
       toast.push('error', apiErrorMessage(e, 'No se pudo asignar'));
+    }
+  }
+
+  async function abrirEdicion() {
+    setForm({
+      nombre: op?.nombre ?? '',
+      fecha: op?.fecha ?? '',
+      lugar_realizacion: op?.lugar_realizacion ?? 'escuela',
+      notas: op?.notas ?? '',
+    });
+    setEditing(true);
+  }
+
+  async function guardarEdicion() {
+    if (!id) return;
+    if (!form.fecha) {
+      toast.push('error', 'La fecha es obligatoria');
+      return;
+    }
+    setSaving(true);
+    try {
+      await v1Api.patch(`/operativos/${id}/`, {
+        ...(form.nombre.trim() ? { nombre: form.nombre.trim() } : { nombre: '' }),
+        fecha: form.fecha,
+        lugar_realizacion: form.lugar_realizacion,
+        notas: form.notas,
+      });
+      toast.push('ok', 'Operativo actualizado');
+      setEditing(false);
+      cargar();
+    } catch (e) {
+      // El backend responde 409 si está finalizado o cancelado.
+      toast.push('error', apiErrorMessage(e, 'No se pudo editar'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function eliminar() {
+    if (!id) return;
+    try {
+      await v1Api.delete(`/operativos/${id}/`);
+      toast.push('ok', 'Operativo cancelado');
+      // replace: no dejar el detalle del operativo cancelado en el
+      // historial (igual que al eliminar una escuela).
+      nav('/operativos', { replace: true });
+    } catch (e) {
+      // El backend responde 409 si ya está finalizado o cancelado.
+      toast.push('error', apiErrorMessage(e, 'No se pudo eliminar'));
+      setConfirmDel(false);
     }
   }
 
@@ -171,6 +253,19 @@ export default function OperativoDetail() {
   const completos = Number(completitud?.completos ?? 0);
   const puedeFinalizar = Boolean(completitud?.puede_finalizar);
 
+  // Editar/Eliminar (igual que en escuelas): solo con permiso y si el
+  // operativo sigue editable (el backend responde 409 en finalizado o
+  // cancelado). Eliminar cancela el operativo (DELETE).
+  const editable = estado !== 'finalizado' && estado !== 'cancelado';
+  const puedeEditar = (can('editarOperativo') || esSuper) && editable;
+  const puedeEliminar = (can('cancelarOperativo') || esSuper) && editable;
+
+  const estadoBtn = (texto: string, accion: AccionEstado, disabled?: boolean) => (
+    <button key={texto} className="post-action-btn" disabled={disabled} onClick={() => setPendiente(accion)}>
+      {texto}
+    </button>
+  );
+
   return (
     <div>
       <PageHeader title="Detalle del operativo" backTo="/operativos" />
@@ -185,45 +280,63 @@ export default function OperativoDetail() {
           contar(op.alumnos_count ?? alumnos.length, 'alumno'),
           contar(profs.length, 'profesional', 'profesionales'),
         ]}
+        bannerBottom={
+          <>
+            {estado === 'borrador' && (can('confirmarOperativo') || esSuper) && estadoBtn('Confirmar operativo', 'confirmar')}
+            {estado === 'confirmado' && (
+              <>
+                {(can('iniciarOperativo') || esSuper) && estadoBtn('Iniciar', 'iniciar')}
+                {(can('cancelarOperativo') || esSuper) && estadoBtn('Cancelar', 'cancelar')}
+              </>
+            )}
+            {estado === 'en_curso' && (
+              <>
+                {(can('finalizarOperativo') || esSuper) && estadoBtn('Finalizar', 'finalizar', !puedeFinalizar)}
+                {(can('cancelarOperativo') || esSuper) && estadoBtn('Cancelar', 'cancelar')}
+              </>
+            )}
+          </>
+        }
+        menuEntries={[
+          ...(puedeEditar ? [{ value: 'editar', label: 'Editar', icon: 'edit' }] : []),
+          ...(puedeEliminar ? [{ value: 'eliminar', label: 'Eliminar', icon: 'delete', danger: true }] : []),
+        ]}
+        onMenuSelected={(v) => {
+          if (v === 'editar') abrirEdicion();
+          if (v === 'eliminar') setConfirmDel(true);
+        }}
       />
 
-      {estado === 'confirmado' && (
+      {estado === 'en_curso' && (
         <AppCard>
-          <div className="actions-row" style={{ marginTop: 0 }}>
-            <AppButton label="Iniciar" onClick={() => accionEstado('iniciar')} />
-            <AppButton label="Cancelar" secondary onClick={() => accionEstado('cancelar')} />
-          </div>
+          <h3>{completos}/{total} alumnos completos</h3>
+          {!puedeFinalizar && <div className="hint">Faltan evaluaciones para finalizar</div>}
         </AppCard>
       )}
 
-      {estado === 'en_curso' && (
-        <>
-          <AppCard>
-            <h3>{completos}/{total} alumnos completos</h3>
-            {!puedeFinalizar && <div className="hint">Faltan evaluaciones para finalizar</div>}
-          </AppCard>
-          <AppCard>
-            <div className="actions-row" style={{ marginTop: 0 }}>
-              <AppButton label="Finalizar" disabled={!puedeFinalizar} onClick={() => accionEstado('finalizar')} />
-              <AppButton label="Cancelar" secondary onClick={() => accionEstado('cancelar')} />
-            </div>
-          </AppCard>
-        </>
-      )}
+      <AppCard>
+        <h3>Derivaciones</h3>
+        <div className="hint">Derivaciones generadas en las evaluaciones (Anexo I)</div>
+        <div className="actions-row">
+          <button className="post-action-btn post-action-btn--secondary" onClick={() => nav(`/operativos/${id}/derivaciones`)}>
+            <MIcon name="medical_services" size={16} /> Ver derivaciones
+          </button>
+        </div>
+      </AppCard>
 
       {estado === 'finalizado' && (
         <AppCard>
           <h3>Operativo finalizado — Descargas</h3>
           <div className="hint">Constancias y resúmenes disponibles</div>
           <div className="actions-row">
-            <button className="btn btn-icon" style={{ width: 'auto', height: 44, fontSize: 13 }} disabled={exportando} onClick={() => exportar('pdf')}>
-              <MIcon name="picture_as_pdf" /> Exportar PDF
+            <button className="post-action-btn" disabled={exportando} onClick={() => exportar('pdf')}>
+              <MIcon name="picture_as_pdf" size={16} /> Exportar PDF
             </button>
-            <button className="btn btn-icon" style={{ width: 'auto', height: 44, fontSize: 13 }} disabled={exportando} onClick={() => exportar('excel')}>
-              <MIcon name="table_chart" /> Exportar Excel
+            <button className="post-action-btn" disabled={exportando} onClick={() => exportar('excel')}>
+              <MIcon name="table_chart" size={16} /> Exportar Excel
             </button>
-            <button className="btn btn-icon" style={{ width: 'auto', height: 44, fontSize: 13 }} disabled={exportando} onClick={() => exportar('csv')}>
-              <MIcon name="description" /> Exportar CSV
+            <button className="post-action-btn" disabled={exportando} onClick={() => exportar('csv')}>
+              <MIcon name="description" size={16} /> Exportar CSV
             </button>
           </div>
         </AppCard>
@@ -241,11 +354,8 @@ export default function OperativoDetail() {
         )}
         {estado === 'borrador' && (
           <div className="actions-row">
-            <button className="btn btn-icon" style={{ width: 'auto', height: 44, fontSize: 13 }} onClick={() => accionEstado('confirmar')}>
-              <MIcon name="check_circle" /> Confirmar operativo
-            </button>
-            <button className="btn btn-icon" style={{ width: 'auto', height: 44, fontSize: 13, background: 'var(--campo)', color: 'var(--primario)' }} onClick={abrirAsignar}>
-              <MIcon name="person_add" /> Asignar profesional
+            <button className="post-action-btn post-action-btn--secondary" onClick={abrirAsignar}>
+              <MIcon name="person_add" size={16} /> Asignar profesional
             </button>
           </div>
         )}
@@ -253,7 +363,7 @@ export default function OperativoDetail() {
 
       <AppCard>
         <h3>Alumnos ({op.alumnos_count ?? alumnos.length})</h3>
-        {puedeImportarCsv && (
+        {puedeImportarCsv && estado === 'borrador' && (
           <>
             <div style={{ fontSize: 13, margin: '8px 0' }}>Importar nómina desde CSV</div>
             <label className="btn" style={{ width: 'auto', height: 44, fontSize: 13, cursor: 'pointer', opacity: importando ? 0.5 : 1 }}>
@@ -307,7 +417,7 @@ export default function OperativoDetail() {
                             <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {[a.apellido, a.nombre].filter(Boolean).join(', ')}
                             </div>
-                            {a.dni && <div style={{ fontSize: 12, color: 'rgba(45,45,58,.6)' }}>DNI {a.dni}</div>}
+                            {a.dni && <div style={{ fontSize: 12, color: 'var(--texto-suave)' }}>DNI {a.dni}</div>}
                           </div>
                           <span className={`badge ${a.completo ? 'ok' : ''}`}>{a.completo ? 'Completo' : 'Pendiente'}</span>
                           <MIcon name="chevron_right" />
@@ -321,6 +431,45 @@ export default function OperativoDetail() {
           </>
         )}
       </AppCard>
+
+      {pendiente && (
+        <Modal
+          title={CONFIRMAR_TEXTO[pendiente].titulo}
+          saveLabel="Sí"
+          cancelLabel="No"
+          onSave={() => accionEstado(pendiente)}
+          onCancel={() => setPendiente(null)}
+        >
+          <p style={{ fontSize: 14 }}>{CONFIRMAR_TEXTO[pendiente].mensaje}</p>
+        </Modal>
+      )}
+
+      {editing && (
+        <Modal title="Editar operativo" saving={saving} onSave={guardarEdicion} onCancel={() => setEditing(false)}>
+          <Field label="Nombre">
+            <TextInput placeholder="Ej: Operativo 2026" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
+          </Field>
+          <Field label="Fecha *">
+            <TextInput type="date" value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })} />
+          </Field>
+          <Field label="Lugar de realización">
+            <SelectInput value={form.lugar_realizacion} onChange={(e) => setForm({ ...form, lugar_realizacion: e.target.value })}>
+              <option value="escuela">En la escuela</option>
+              <option value="centro_salud">En el centro de salud</option>
+              <option value="otros">Otros</option>
+            </SelectInput>
+          </Field>
+          <Field label="Notas">
+            <textarea rows={3} placeholder="Añadí notas…" value={form.notas} onChange={(e) => setForm({ ...form, notas: e.target.value })} />
+          </Field>
+        </Modal>
+      )}
+
+      {confirmDel && (
+        <Modal title={`¿Eliminar ${titulo}?`} saveLabel="Sí" cancelLabel="No" onSave={eliminar} onCancel={() => setConfirmDel(false)}>
+          El operativo se cancelará. Esta acción no se puede deshacer.
+        </Modal>
+      )}
 
       {showAsignar && (
         <Modal title="Asignar profesional" saveLabel="Asignar" onSave={asignar} onCancel={() => setShowAsignar(false)}>
@@ -338,7 +487,7 @@ export default function OperativoDetail() {
             <SelectInput value={asig.rol} onChange={(e) => setAsig({ ...asig, rol: e.target.value })}>
               <option value="medico">Médico</option>
               <option value="odontologo">Odontólogo</option>
-              <option value="ayudante">Ayudante</option>
+              <option value="administrativo">Administrativo</option>
             </SelectInput>
           </Field>
         </Modal>

@@ -2,29 +2,31 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { apiErrorMessage } from '../api/client';
-import { AppButton, Field, TextInput, useToast } from '../components/ui';
+import { AppButton, AppSwitch, Field, PasswordInput, TextInput } from '../components/ui';
 
+// Espejo de login_screen.dart:
+// título "Bienvenido" + subtítulo, email, contraseña con ojo, Recordarme,
+// "¿Olvidaste tu contraseña?", error centrado sobre el botón,
+// "INICIAR SESIÓN" y "Regístrese aquí".
 export default function Login() {
   const { login } = useAuth();
   const nav = useNavigate();
-  const toast = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [recordarme, setRecordarme] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
     setError(null);
     try {
-      await login(email.trim(), password);
-      toast.push('ok', '¡Bienvenido!');
+      await login(email.trim(), password, recordarme);
       nav('/inicio', { replace: true });
     } catch (err) {
-      const msg = apiErrorMessage(err, 'Credenciales incorrectas');
-      setError(msg);
-      toast.push('error', msg);
+      setError(apiErrorMessage(err, 'Credenciales incorrectas'));
     } finally {
       setLoading(false);
     }
@@ -33,11 +35,9 @@ export default function Login() {
   return (
     <div className="login-wrap">
       <div className="login-card">
-        <div className="brand">
-          <h1>PROSANE</h1>
-          <p>Programa Nacional de Salud Escolar • Salta</p>
-        </div>
         <div className="card">
+          <h2 className="login-title">Bienvenido</h2>
+          <p className="login-subtitle">Ingresá con tu cuenta para continuar</p>
           <form onSubmit={submit}>
             <Field label="Correo electrónico">
               <TextInput
@@ -49,25 +49,23 @@ export default function Login() {
               />
             </Field>
             <Field label="Contraseña">
-              <TextInput
-                type="password"
+              <PasswordInput
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"
               />
             </Field>
+            <AppSwitch value={recordarme} onChanged={setRecordarme} label="Recordarme" />
+            <Link className="login-link" to="/forgot-password">
+              ¿Olvidaste tu contraseña?
+            </Link>
             {error && <div className="form-error">{error}</div>}
-            <AppButton
-              label="INGRESAR"
-              type="submit"
-              loading={loading}
-              disabled={!email.trim() || !password}
-            />
+            <AppButton label="INICIAR SESIÓN" type="submit" loading={loading} />
           </form>
-          <div style={{ textAlign: 'center', marginTop: 12 }}>
-            <Link to="/forgot-password">¿Olvidaste tu contraseña?</Link>
-          </div>
+          <Link className="login-link" to="/signup">
+            Regístrese aquí
+          </Link>
         </div>
       </div>
     </div>

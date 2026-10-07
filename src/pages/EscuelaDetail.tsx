@@ -27,8 +27,21 @@ export default function EscuelaDetail() {
   async function cargar() {
     try {
       const { data } = await v1Api.get(`/escuelas/${escuelaId}/`);
+      if (data?.activa === false) {
+        setLoading(false);
+        toast.push('ok', 'La escuela ya no está disponible');
+        nav('/escuelas', { replace: true });
+        return;
+      }
       setEscuela(data);
     } catch (e) {
+      // 404 = escuela desactivada/borrada: volver al listado en vez de
+      // quedar mostrando una escuela que ya no existe (atrás/URL directa).
+      if ((e as any)?.response?.status === 404) {
+        toast.push('ok', 'La escuela ya no está disponible');
+        nav('/escuelas', { replace: true });
+        return;
+      }
       toast.push('error', apiErrorMessage(e, 'No se pudo cargar la escuela'));
     } finally {
       setLoading(false);
@@ -85,7 +98,10 @@ export default function EscuelaDetail() {
     try {
       await v1Api.delete(`/escuelas/${escuelaId}/`);
       toast.push('ok', 'Escuela eliminada');
-      nav('/escuelas');
+      // replace en vez de push: no dejar el detalle de la escuela borrada
+      // en el historial, así "atrás" no la vuelve a montar (espejo del
+      // context.pop() del móvil tras eliminar).
+      nav('/escuelas', { replace: true });
     } catch (e) {
       // El backend puede rechazar con 409 (usuarios/operativos asociados).
       toast.push('error', apiErrorMessage(e, 'No se pudo eliminar'));
@@ -136,7 +152,7 @@ export default function EscuelaDetail() {
             {dato('Ámbito', escuela.ambito)}
             {dato('Teléfono', escuela.telefono)}
             {esPlurigrado && (
-              <div style={{ marginTop: 8, fontSize: 12, fontStyle: 'italic', color: 'rgba(45,45,58,.7)' }}>
+              <div style={{ marginTop: 8, fontSize: 12, fontStyle: 'italic', color: 'var(--texto-suave)' }}>
                 Escuela plurigrado rural: no necesita cursos. Los alumnos se registran sin curso.
               </div>
             )}
@@ -197,7 +213,7 @@ export default function EscuelaDetail() {
       )}
 
       {confirmDel && (
-        <Modal title={`¿Eliminar ${escuela.nombre}?`} saveLabel="Eliminar" onSave={eliminar} onCancel={() => setConfirmDel(false)}>
+        <Modal title={`¿Eliminar ${escuela.nombre}?`} saveLabel="Sí" cancelLabel="No" onSave={eliminar} onCancel={() => setConfirmDel(false)}>
           La escuela se desactivará. Esta acción no se puede deshacer.
         </Modal>
       )}

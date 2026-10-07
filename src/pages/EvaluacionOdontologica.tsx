@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { useBlocker, useNavigate, useParams } from 'react-router-dom';
 import { v1Api, apiErrorMessage } from '../api/client';
 import { AppButton, AppCard, Field, Modal, PageHeader, SelectInput, TextInput, useToast } from '../components/ui';
 
@@ -141,12 +141,59 @@ export default function EvaluacionOdontologica() {
   const [estadoOp, setEstadoOp] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [f, setF] = useState<any>({});
+  const [otrosMarcado, setOtrosMarcado] = useState(false);
   const [odonto, setOdonto] = useState<Record<string, Pieza>>({});
   const [editPieza, setEditPieza] = useState<string | null>(null);
   const [ep, setEp] = useState<Pieza>(piezaVacia());
+  const [paso, setPaso] = useState(0);
+  // Firma de lo último persistido para el dirty guard.
+  const firmaGuardada = useRef('');
 
-  const set = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }));
-  const str = (v: any) => (v === null || v === undefined ? '' : String(v));
+  // Pasos del wizard (3 secciones + revisión). Mismo orden que la app.
+  const TITULOS_PASOS = ['Salud bucal', 'Prácticas e índices', 'Odontograma', 'Revisión'];
+
+  // En odontológica no hay obligatorios: Siguiente persiste el avance
+  // (autoguardado). Si falla la red se queda en el paso para reintentar.
+  async function intentarAvanzar() {
+    const ok = await guardarAvance();
+    if (ok) {
+      setError(null);
+      setPaso(Math.min(paso + 1, 3));
+    }
+  }
+
+  // Firma del estado para detectar cambios sin guardar (dirty guard).
+  function firmaActual(): string {
+    return JSON.stringify({ f, otrosMarcado, odonto });
+  }
+  function marcarGuardado() {
+    firmaGuardada.current = firmaActual();
+  }
+  const tieneCambios = firmaActual() !== firmaGuardada.current;
+
+  const set = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }));  // Al salir de "Con hallazgos" se limpian checks y Otros para no guardar
+  // datos contradictorios (ej. "Sin hallazgos" + caries).
+  const setSaludBucal = (v: string) => {
+    if (v === 'con_hallazgos') {
+      set('salud_bucal', v);
+      return;
+    }
+    setF((p: any) => ({
+      ...p,
+      salud_bucal: v,
+      lesiones_tejidos_blandos: false,
+      maloclusion: false,
+      fluorosis: false,
+      caries: false,
+      otros: '',
+    }));
+    setOtrosMarcado(false);
+  };
+  const setOtrosCheck = (v: boolean) => {
+    setOtrosMarcado(v);
+    // Al desmarcar se borra el texto para no guardarlo huérfano.
+    if (!v) set('otros', '');
+  };
 
   useEffect(() => {
     (async () => {
@@ -157,8 +204,9 @@ export default function EvaluacionOdontologica() {
         ]);
         setEstadoOp(op.data.estado ?? '');
         const d = ev.data ?? {};
-        setF({
-          salud_bucal: d.salud_bucal ?? '',
+        const f0 = {
+          // Sin valor guardado (nueva o legacy) se asume "No evaluado".
+          salud_bucal: d.salud_bucal || 'no_eval',
           lesiones_tejidos_blandos: !!d.lesiones_tejidos_blandos,
           maloclusion: !!d.maloclusion,
           fluorosis: !!d.fluorosis,
@@ -167,9 +215,12 @@ export default function EvaluacionOdontologica() {
           topicacion_fluor: !!d.topicacion_fluor,
           ensenanza_cepillado: !!d.ensenanza_cepillado,
           alta_basica: !!d.alta_basica,
-          cpo_c: str(d.cpo_c), cpo_p: str(d.cpo_p), cpo_o: str(d.cpo_o),
-          ceo_c: str(d.ceo_c), ceo_e: str(d.ceo_e), ceo_o: str(d.ceo_o),
-        });
+          cpo_c: !!d.cpo_c, cpo_p: !!d.cpo_p, cpo_o: !!d.cpo_o,
+          ceo_c: !!d.ceo_c, ceo_e: !!d.ceo_e, ceo_o: !!d.ceo_o,
+        };
+        setF(f0);
+        const om = (d.otros ?? '') !== '';
+        setOtrosMarcado(om);
         const raw = d.odontograma ?? {};
         const map: Record<string, Pieza> = {};
         for (const [k, v] of Object.entries<any>(raw)) {
@@ -181,6 +232,9 @@ export default function EvaluacionOdontologica() {
           };
         }
         setOdonto(map);
+        firmaGuardada.current = JSON.stringify({
+          f: f0, otrosMarcado: om, odonto: map,
+        });
       } catch {
         // Sin evaluación previa: se parte de un estado vacío editable.
       } finally {
@@ -193,8 +247,10 @@ export default function EvaluacionOdontologica() {
   const noEditable = estadoOp === 'finalizado' || estadoOp === 'cancelado';
   const enCurso = estadoOp === 'en_curso';
   const ro = !enCurso;
+
+  // Bloquea salidas (botón atrás, links, recarga) con cambios sin guardar.
+  const blocker = useBlocker(tieneCambios && enCurso && !loading);
   const pieza = (n: string) => odonto[n] ?? piezaVacia();
-  const intOrNull = (v: any) => (String(v ?? '').trim() === '' ? null : parseInt(String(v), 10));
 
   function abrirPieza(n: string) {
     if (ro) return;
@@ -218,21 +274,50 @@ export default function EvaluacionOdontologica() {
   }
 
   async function guardar() {
+    await enviar(false, 'Evaluación guardada', true);
+  }
+
+  // Guarda el avance sin marcar la evaluación como completada.
+  // Devuelve si persistió (para el autoguardado al Siguiente).
+  async function guardarAvance(): Promise<boolean> {
+    return enviar(true, 'Avance guardado', false);
+  }
+
+  async function enviar(parcial: boolean, okMsg: string, completar: boolean): Promise<boolean> {
     setSaving(true);
     setError(null);
     try {
       await v1Api.put(`/operativos/${opId}/alumnos/${alumnoId}/evaluacion-odontologica/`, {
-        salud_bucal: f.salud_bucal || '',
+        ...payload(),
+        completar,
+      });
+      marcarGuardado();
+      if (!parcial) toast.push('ok', okMsg);
+      if (!parcial) nav(`/operativos/${opId}/alumnos/${alumnoId}`);
+      return true;
+    } catch (e) {
+      const m = apiErrorMessage(e, 'No se pudo guardar la evaluación.');
+      setError(m);
+      toast.push('error', m);
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function payload() {
+    return {
+        salud_bucal: f.salud_bucal || 'no_eval',
         lesiones_tejidos_blandos: !!f.lesiones_tejidos_blandos,
         maloclusion: !!f.maloclusion,
         fluorosis: !!f.fluorosis,
         caries: !!f.caries,
-        otros: f.otros || '',
+        otros: otrosMarcado ? (f.otros || '') : '',
         topicacion_fluor: !!f.topicacion_fluor,
         ensenanza_cepillado: !!f.ensenanza_cepillado,
         alta_basica: !!f.alta_basica,
-        cpo_c: intOrNull(f.cpo_c), cpo_p: intOrNull(f.cpo_p), cpo_o: intOrNull(f.cpo_o),
-        ceo_c: intOrNull(f.ceo_c), ceo_e: intOrNull(f.ceo_e), ceo_o: intOrNull(f.ceo_o),
+        cpo_c: !!f.cpo_c, cpo_p: !!f.cpo_p, cpo_o: !!f.cpo_o,
+        ceo_c: !!f.ceo_c, ceo_e: !!f.ceo_e, ceo_o: !!f.ceo_o,
         odontograma: Object.fromEntries(
           Object.entries(odonto).map(([k, p]) => [
             k,
@@ -244,16 +329,7 @@ export default function EvaluacionOdontologica() {
             },
           ]),
         ),
-      });
-      toast.push('ok', 'Evaluación guardada');
-      nav(`/operativos/${opId}/alumnos/${alumnoId}`);
-    } catch (e) {
-      const msg = apiErrorMessage(e, 'No se pudo guardar la evaluación.');
-      setError(msg);
-      toast.push('error', msg);
-    } finally {
-      setSaving(false);
-    }
+      };
   }
 
   if (loading) return <AppCard>Cargando…</AppCard>;
@@ -315,30 +391,78 @@ export default function EvaluacionOdontologica() {
   return (
     <div>
       <PageHeader title="Evaluación odontológica" backTo={`/operativos/${opId}/alumnos/${alumnoId}`} />
+      {blocker.state === 'blocked' && (
+        <Modal
+          title="Salir sin guardar?"
+          saveLabel="Salir"
+          cancelLabel="Seguir editando"
+          onSave={() => blocker.proceed()}
+          onCancel={() => blocker.reset()}
+        >
+          <p style={{ fontSize: 14 }}>Tenés cambios sin guardar. Si salís ahora se pierden.</p>
+        </Modal>
+      )}
       {noEditable && <div className="info-box ok">🔒 Operativo finalizado — solo lectura</div>}
       {!noEditable && !enCurso && (
         <div className="info-box">Solo se puede cargar cuando el operativo está en curso</div>
       )}
       <div style={{ opacity: enCurso ? 1 : 0.85 }}>
         <AppCard>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>
+            Paso {Math.min(paso, 3) + 1} de 4 · {TITULOS_PASOS[Math.min(paso, 3)]}
+          </div>
+          <div style={{ height: 8, background: 'rgba(0,0,0,.08)', borderRadius: 4, margin: '8px 0' }}>
+            <div style={{ width: `${((Math.min(paso, 3) + 1) / 4) * 100}%`, height: '100%', background: 'var(--primario)', borderRadius: 4 }} />
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {TITULOS_PASOS.map((t, i) => (
+              <button
+                key={t}
+                type="button"
+                title={t}
+                onClick={() => setPaso(i)}
+                style={{
+                  width: 26, height: 26, borderRadius: '50%', border: 'none', cursor: 'pointer',
+                  fontSize: 12, fontWeight: 700,
+                  background: i === paso ? 'var(--primario)' : 'rgba(0,0,0,.08)',
+                  color: i === paso ? '#fff' : 'inherit',
+                }}
+              >
+                {i + 1}
+              </button>
+            ))}
+          </div>
+        </AppCard>
+        <div style={{ height: 12 }} />
+        {paso === 0 && (
+        <AppCard>
           <h3>Salud bucal</h3>
           <Field label="Estado">
-            <SelectInput value={f.salud_bucal || ''} disabled={ro} onChange={(e) => set('salud_bucal', e.target.value)}>
-              <option value="">…</option>
+            <SelectInput value={f.salud_bucal || 'no_eval'} disabled={ro} onChange={(e) => setSaludBucal(e.target.value)}>
               <option value="con_hallazgos">Con hallazgos</option>
               <option value="sin_hallazgos">Sin hallazgos</option>
               <option value="no_eval">No evaluado</option>
             </SelectInput>
           </Field>
-          {check('Lesiones en tejidos blandos', !!f.lesiones_tejidos_blandos, (v) => set('lesiones_tejidos_blandos', v))}
-          {check('Maloclusión', !!f.maloclusion, (v) => set('maloclusion', v))}
-          {check('Fluorosis', !!f.fluorosis, (v) => set('fluorosis', v))}
-          {check('Caries', !!f.caries, (v) => set('caries', v))}
-          <Field label="Otros">
-            <TextInput value={f.otros ?? ''} disabled={ro} onChange={(e) => set('otros', e.target.value)} />
-          </Field>
+          {f.salud_bucal === 'con_hallazgos' && (
+            <>
+              {check('Lesiones sospechosas en tejidos blandos', !!f.lesiones_tejidos_blandos, (v) => set('lesiones_tejidos_blandos', v))}
+              {check('Maloclusión', !!f.maloclusion, (v) => set('maloclusion', v))}
+              {check('Fluorosis', !!f.fluorosis, (v) => set('fluorosis', v))}
+              {check('Caries', !!f.caries, (v) => set('caries', v))}
+              {check('Otros', otrosMarcado, setOtrosCheck)}
+              {otrosMarcado && (
+                <Field label="¿Cuáles?">
+                  <TextInput value={f.otros ?? ''} disabled={ro} onChange={(e) => set('otros', e.target.value)} />
+                </Field>
+              )}
+            </>
+          )}
         </AppCard>
+        )}
 
+        {paso === 1 && (
+        <>
         <AppCard>
           <h3>Prácticas</h3>
           {check('Topicación de flúor', !!f.topicacion_fluor, (v) => set('topicacion_fluor', v))}
@@ -349,27 +473,58 @@ export default function EvaluacionOdontologica() {
         <AppCard>
           <h3>Índice CPO/ceo</h3>
           <strong style={{ fontSize: 13 }}>CPO (dentición permanente)</strong>
-          <Field label="Cariados (C)"><TextInput type="number" value={f.cpo_c ?? ''} disabled={ro} onChange={(e) => set('cpo_c', e.target.value)} /></Field>
-          <Field label="Perdidos (P)"><TextInput type="number" value={f.cpo_p ?? ''} disabled={ro} onChange={(e) => set('cpo_p', e.target.value)} /></Field>
-          <Field label="Obturados (O)"><TextInput type="number" value={f.cpo_o ?? ''} disabled={ro} onChange={(e) => set('cpo_o', e.target.value)} /></Field>
-          <strong style={{ fontSize: 13 }}>ceo (dentición temporaria)</strong>
-          <Field label="Cariados (c)"><TextInput type="number" value={f.ceo_c ?? ''} disabled={ro} onChange={(e) => set('ceo_c', e.target.value)} /></Field>
-          <Field label="Con extracción indicada (e)"><TextInput type="number" value={f.ceo_e ?? ''} disabled={ro} onChange={(e) => set('ceo_e', e.target.value)} /></Field>
-          <Field label="Obturados (o)"><TextInput type="number" value={f.ceo_o ?? ''} disabled={ro} onChange={(e) => set('ceo_o', e.target.value)} /></Field>
+          {check('Cariados (C)', !!f.cpo_c, (v) => set('cpo_c', v))}
+          {check('Perdidos (P)', !!f.cpo_p, (v) => set('cpo_p', v))}
+          {check('Obturados (O)', !!f.cpo_o, (v) => set('cpo_o', v))}
+          <strong style={{ fontSize: 13, marginTop: 8, display: 'block' }}>ceo (dentición temporaria)</strong>
+          {check('Cariados (c)', !!f.ceo_c, (v) => set('ceo_c', v))}
+          {check('Con extracción indicada (e)', !!f.ceo_e, (v) => set('ceo_e', v))}
+          {check('Obturados (o)', !!f.ceo_o, (v) => set('ceo_o', v))}
         </AppCard>
+        </>
+        )}
 
+        {paso === 2 && (
         <AppCard>
           <h3>Odontograma</h3>
           {denticion('Permanente', PERMANENTES)}
           {denticion('Temporaria', TEMPORARIAS)}
           <div style={{ fontSize: 11 }}>Verde: normal · Azul: tratado · Rojo: pendiente · Gris: ausente</div>
         </AppCard>
+        )}
+
+        {paso === 3 && (
+        <AppCard>
+          <h3>Revisión</h3>
+          {['Salud bucal', 'Prácticas e índices', 'Odontograma'].map((t, i) => (
+            <div
+              key={t}
+              onClick={() => setPaso(i)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', cursor: 'pointer' }}
+            >
+              <span style={{ color: 'green' }}>✓</span>
+              <span style={{ flex: 1, fontSize: 13 }}>{t}</span>
+              <span style={{ color: '#999' }}>›</span>
+            </div>
+          ))}
+        </AppCard>
+        )}
       </div>
 
+      <div style={{ height: 12 }} />
       {enCurso && (
         <AppCard>
           {error && <div className="form-error">{error}</div>}
-          <AppButton label="Guardar" loading={saving} onClick={guardar} />
+          <div className="wizard-nav">
+            {paso > 0 && (
+              <AppButton label="Atrás" secondary onClick={() => setPaso(Math.max(0, paso - 1))} />
+            )}
+            {paso < 3 ? (
+              <AppButton label="Siguiente" loading={saving} onClick={intentarAvanzar} />
+            ) : (
+              <AppButton label="Guardar" loading={saving} onClick={guardar} />
+            )}
+          </div>
         </AppCard>
       )}
       {!enCurso && error && (

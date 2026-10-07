@@ -15,6 +15,13 @@ export default function SeccionEscuela() {
   const [f, setF] = useState<any>({ escuela_preocupa_salud: false, escuela_preocupa_detalle: '', escuela_dificultad_lenguaje: false, escuela_bajo_tratamiento: false });
 
   const set = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }));
+  // Al marcar "No" se borra el detalle para no guardarlo huérfano
+  // (igual que la app).
+  const setPreocupa = (v: boolean) => setF((p: any) => ({
+    ...p,
+    escuela_preocupa_salud: v,
+    ...(!v ? { escuela_preocupa_detalle: '' } : {}),
+  }));
 
   useEffect(() => {
     (async () => {
@@ -41,6 +48,8 @@ export default function SeccionEscuela() {
     for (const k of ['escuela_preocupa_salud', 'escuela_preocupa_detalle', 'escuela_dificultad_lenguaje', 'escuela_bajo_tratamiento']) {
       if (oa[k] !== undefined) out[k] = oa[k];
     }
+    // Sanea detalle huérfano legacy.
+    if (!out.escuela_preocupa_salud) out.escuela_preocupa_detalle = '';
     return out;
   }
 
@@ -65,14 +74,16 @@ export default function SeccionEscuela() {
       <AppCard>
         {ro && <div className="info-box ok">Solo lectura</div>}
         <Field label="¿Preocupa su salud?">
-          <SelectInput value={boolAOpcion(f.escuela_preocupa_salud)} disabled={ro} onChange={(e) => set('escuela_preocupa_salud', e.target.value === 'true')}>
+          <SelectInput value={boolAOpcion(f.escuela_preocupa_salud)} disabled={ro} onChange={(e) => setPreocupa(e.target.value === 'true')}>
             <option value="false">No</option>
             <option value="true">Sí</option>
           </SelectInput>
         </Field>
-        <Field label="Detalle de la preocupación">
-          <TextInput value={f.escuela_preocupa_detalle ?? ''} disabled={ro} onChange={(e) => set('escuela_preocupa_detalle', e.target.value)} />
-        </Field>
+        {!!f.escuela_preocupa_salud && (
+          <Field label="Detalle de la preocupación">
+            <TextInput value={f.escuela_preocupa_detalle ?? ''} disabled={ro} onChange={(e) => set('escuela_preocupa_detalle', e.target.value)} />
+          </Field>
+        )}
         <Field label="¿Dificultad de lenguaje?">
           <SelectInput value={boolAOpcion(f.escuela_dificultad_lenguaje)} disabled={ro} onChange={(e) => set('escuela_dificultad_lenguaje', e.target.value === 'true')}>
             <option value="false">No</option>

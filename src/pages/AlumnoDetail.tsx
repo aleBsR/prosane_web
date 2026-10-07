@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { v1Api, apiErrorMessage } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
-import { AppCard, Field, MIcon, PageHeader, PostCard, SelectInput, useToast } from '../components/ui';
+import { AppCard, MIcon, PageHeader, PostCard, useToast } from '../components/ui';
 
 export default function AlumnoDetail() {
   const { opId, alumnoId } = useParams();
@@ -69,15 +69,40 @@ export default function AlumnoDetail() {
   const datosHechos = !!alumno.antecedentes_completado;
 
   const btn = (icono: string, texto: string, to: string) => (
-    <button key={to} className="btn btn-icon" style={{ width: 'auto', height: 44, fontSize: 13 }} onClick={() => nav(to)}>
-      <MIcon name={icono} /> {texto}
+    <button key={to} className="post-action-btn" onClick={() => nav(to)}>
+      <MIcon name={icono} size={16} /> {texto}
     </button>
   );
+
+  const estadoKey = ['pendiente', 'presente', 'ausente', 'evaluado'].includes(estado)
+    ? estado
+    : 'pendiente';
+  const estadoLabel =
+    estadoKey === 'presente' ? 'Presente'
+    : estadoKey === 'ausente' ? 'Ausente'
+    : estadoKey === 'evaluado' ? 'Evaluado'
+    : 'Pendiente';
 
   const puedeConstancia =
     estadoOp === 'finalizado' &&
     (alumno.completo || esAusente || esEvaluado) &&
     (can('verOperativo') || rol === 'superadmin');
+
+  async function descargarPlanilla() {
+    if (!opId || !alumnoId) return;
+    try {
+      const r = await v1Api.get(`/operativos/${opId}/alumnos/${alumnoId}/planilla/`, { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([r.data], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `planilla-${alumno.dni || alumnoId}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.push('ok', 'Planilla descargada');
+    } catch (e) {
+      toast.push('error', apiErrorMessage(e, 'No se pudo generar (solo en operativo finalizado)'));
+    }
+  }
   const puedeVerFicha =
     (estadoOp === 'finalizado' || enCurso) &&
     (alumno.completo || esAusente || esEvaluado) &&
@@ -96,38 +121,54 @@ export default function AlumnoDetail() {
           </span>
         }
         menuEntries={[
-          ...(puedeConstancia ? [{ value: 'constancia', label: 'Constancia PDF', icon: 'picture_as_pdf' }] : []),
+          ...(puedeConstancia ? [{ value: 'planilla', label: 'Planilla PDF', icon: 'description' }] : []),
           ...(puedeVerFicha ? [{ value: 'datos', label: 'Ver datos', icon: 'visibility' }] : []),
         ]}
-        onMenuSelected={(v) => nav(v)}
-        body={
+        onMenuSelected={(v) => {
+          if (v === 'planilla') descargarPlanilla();
+          else nav(v);
+        }}
+        bannerIcon="person_outline"
+        bannerTop={
           <>
-            {(esPresente || esEvaluado) && (
-              <div style={{ marginBottom: 8 }}>
-                <span className={`chip ${escuelaHecha ? 'ok' : ''}`}>{escuelaHecha ? 'E ✓' : 'E'}</span>
-                <span className={`chip ${datosHechos ? 'ok' : ''}`}>{datosHechos ? 'A ✓' : 'A'}</span>
-                <span className={`chip ${medicaHecha ? 'ok' : ''}`}>{medicaHecha ? 'M ✓' : 'M'}</span>
-                <span className={`chip ${odontoHecha ? 'ok' : ''}`}>{odontoHecha ? 'O ✓' : 'O'}</span>
-              </div>
-            )}
-            {esAusente && <p style={{ fontSize: 12, fontStyle: 'italic' }}>Ausente — no requiere evaluaciones</p>}
             {puedeEstado && !esEvaluado ? (
-              <Field label="Asistencia">
-                <SelectInput value={['pendiente', 'presente', 'ausente'].includes(estado) ? estado : 'pendiente'} onChange={(e) => cambiarEstado(e.target.value)}>
+              <div className="asistencia-row">
+                <MIcon name="how_to_reg" size={14} />
+                <span>Asistencia:</span>
+                <select
+                  className={`asistencia-select asistencia-select--${estadoKey}`}
+                  value={estadoKey}
+                  onChange={(e) => cambiarEstado(e.target.value)}
+                >
                   <option value="pendiente">Pendiente</option>
                   <option value="presente">Presente</option>
                   <option value="ausente">Ausente</option>
-                </SelectInput>
-              </Field>
+                </select>
+              </div>
             ) : (
-              <div style={{ fontSize: 13 }}>Asistencia: <strong>{estado}</strong></div>
+              <div className="asistencia-row">
+                <span className={`estado-pill estado-pill--${estadoKey}`}>
+                  <MIcon name="how_to_reg" size={12} /> {estadoLabel}
+                </span>
+              </div>
             )}
+            {esAusente && <p className="ausente-note">Ausente — no requiere evaluaciones</p>}
             {estadoOp !== 'finalizado' && !esPresente && !esAusente && !esEvaluado && (
-              <div className="hint">Marcá como Presente para habilitar la carga</div>
+              <div className="carga-hint">Marcá como Presente para habilitar la carga</div>
             )}
           </>
         }
-        actions={
+        bannerChips={
+          esPresente || esEvaluado
+            ? [
+                <span key="e" className={`tilde-chip ${escuelaHecha ? 'tilde-ok' : ''}`}>{escuelaHecha ? 'E ✓' : 'E'}</span>,
+                <span key="a" className={`tilde-chip ${datosHechos ? 'tilde-ok' : ''}`}>{datosHechos ? 'A ✓' : 'A'}</span>,
+                <span key="m" className={`tilde-chip ${medicaHecha ? 'tilde-ok' : ''}`}>{medicaHecha ? 'M ✓' : 'M'}</span>,
+                <span key="o" className={`tilde-chip ${odontoHecha ? 'tilde-ok' : ''}`}>{odontoHecha ? 'O ✓' : 'O'}</span>,
+              ]
+            : []
+        }
+        bannerBottom={
           puedeVerOModificar ? (
             <>
               {can('cargarEvaluacionMedica') && enCurso && btn(medicaHecha ? 'visibility' : 'medical_services', medicaHecha ? 'Ver / editar eval. médica' : 'Evaluación médica', 'medica')}

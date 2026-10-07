@@ -101,7 +101,7 @@ export default function Profesionales() {
   if (loading) return <AppCard>Cargando…</AppCard>;
   return (
     <div>
-      <PageHeader title="Profesionales" backTo="/gestion-usuarios" />
+      <PageHeader title="Profesionales" backTo="/inicio" />
       {lista.length === 0 ? (
         <EmptyState titulo="No hay profesionales" subtitulo="Creá uno para comenzar" />
       ) : (
@@ -113,8 +113,8 @@ export default function Profesionales() {
                   <div style={{ fontWeight: 600, fontSize: 16, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {`${p.nombre || ''} ${p.apellido || ''}`.trim() || p.email}
                   </div>
-                  <div style={{ fontSize: 12, color: 'rgba(45,45,58,.6)', marginTop: 4 }}>{p.email}</div>
-                  <div style={{ fontSize: 12, color: 'rgba(45,45,58,.6)', marginTop: 4 }}>
+                  <div style={{ fontSize: 12, color: 'var(--texto-suave)', marginTop: 4 }}>{p.email}</div>
+                  <div style={{ fontSize: 12, color: 'var(--texto-suave)', marginTop: 4 }}>
                     {p.rol === 'medico' ? 'Médico' : p.rol === 'odontologo' ? 'Odontólogo' : p.rol} · Mat. {p.matricula}
                   </div>
                   {!p.is_active && <div style={{ fontSize: 12, color: 'var(--error)', marginTop: 4 }}>Cuenta desactivada</div>}

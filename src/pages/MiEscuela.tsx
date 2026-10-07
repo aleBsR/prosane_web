@@ -1,13 +1,18 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { v1Api, apiErrorMessage } from '../api/client';
-import { AppButton, AppCard, Field, PageHeader, SelectInput, TextInput, useToast } from '../components/ui';
+import { AppButton, AppCard, Field, MIcon, Modal, PageHeader, PostCard, SelectInput, TextInput, useToast } from '../components/ui';
 import { MODALIDADES, SECTORES } from './Escuelas';
 
+// Espejo de mi_escuela_screen.dart: tarjeta de solo lectura (avatar, CUE,
+// chips, cursos) + aviso y diálogo de completar solo si el perfil está
+// incompleto. Acciones: gestionar cursos y ver operativos.
 export default function MiEscuela() {
+  const nav = useNavigate();
   const toast = useToast();
   const [escuela, setEscuela] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [editando, setEditando] = useState(false);
   const [form, setForm] = useState({ nombre: '', cue: '', sector_gestion: '', modalidad_educativa: '', telefono: '', localidad: '' });
   const [saving, setSaving] = useState(false);
 
@@ -47,7 +52,8 @@ export default function MiEscuela() {
         telefono: form.telefono || undefined,
         ...(form.localidad ? { domicilio: { localidad: form.localidad } } : {}),
       });
-      toast.push('ok', 'Escuela actualizada');
+      toast.push('ok', '¡Datos de la escuela actualizados!');
+      setEditando(false);
       cargar();
     } catch (e) {
       toast.push('error', apiErrorMessage(e, 'No se pudo guardar'));
@@ -58,51 +64,79 @@ export default function MiEscuela() {
 
   if (loading) return <AppCard>Cargando…</AppCard>;
   if (!escuela) return <AppCard>No tenés escuela asignada.</AppCard>;
-  const faltantes: string[] = [];
-  if (!form.cue) faltantes.push('CUE');
-  if (!form.sector_gestion) faltantes.push('sector de gestión');
-  if (!form.modalidad_educativa) faltantes.push('modalidad educativa');
-  if (!form.telefono) faltantes.push('teléfono');
-  if (!form.localidad) faltantes.push('localidad');
+
+  const titulo = escuela.nombre ?? 'Escuela';
+  const cursos: any[] = escuela.cursos ?? [];
+  const esPlurigrado = !!escuela.plurigrado_rural;
+  const perfilCompleto = escuela.perfil_completo === true;
+  const faltantes: string[] = escuela.campos_faltantes ?? [];
+  const subtitulo = [escuela.cue ? `CUE ${escuela.cue}` : ''].filter(Boolean).join(' • ');
+
+  const btn = (icono: string, texto: string, to: string) => (
+    <button key={to} className="post-action-btn" onClick={() => nav(to)}>
+      <MIcon name={icono} size={16} /> {texto}
+    </button>
+  );
 
   return (
     <div>
       <PageHeader title="Mi escuela" backTo="/inicio" />
-      {faltantes.length > 0 && (
+      {!perfilCompleto && (
         <AppCard>
           <div className="info-box" style={{ border: '1px solid var(--error)' }}>
-            <strong>Completar datos obligatorios:</strong> faltan {faltantes.join(', ')}.
+            <strong>Completá los datos de tu escuela (obligatorio)</strong>
+            <div style={{ marginTop: 4 }}>
+              Falta: {faltantes.length > 0 ? faltantes.join(', ') : 'datos del establecimiento'}.
+            </div>
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <AppButton label="Completar datos" onClick={() => setEditando(true)} />
           </div>
         </AppCard>
       )}
-      <AppCard>
-        <h2>{escuela.nombre}</h2>
-        <Field label="Nombre *"><TextInput value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} /></Field>
-        <Field label="CUE"><TextInput value={form.cue} onChange={(e) => setForm({ ...form, cue: e.target.value })} /></Field>
-        <Field label="Sector de gestión">
-          <SelectInput value={form.sector_gestion} onChange={(e) => setForm({ ...form, sector_gestion: e.target.value })}>
-            <option value="">…</option>
-            {SECTORES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-          </SelectInput>
-        </Field>
-        <Field label="Modalidad educativa">
-          <SelectInput value={form.modalidad_educativa} onChange={(e) => setForm({ ...form, modalidad_educativa: e.target.value })}>
-            <option value="">…</option>
-            {MODALIDADES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-          </SelectInput>
-        </Field>
-        <Field label="Teléfono"><TextInput value={form.telefono} onChange={(e) => setForm({ ...form, telefono: e.target.value })} /></Field>
-        <Field label="Localidad"><TextInput value={form.localidad} onChange={(e) => setForm({ ...form, localidad: e.target.value })} /></Field>
-        <AppButton label="Guardar" loading={saving} onClick={guardar} />
-        <div className="actions-row">
-          <Link className="btn" style={{ width: 'auto', height: 44, fontSize: 13 }} to={`/escuelas/${escuela.id}/cursos?nombre=${encodeURIComponent(escuela.nombre ?? '')}`}>
-            Ver cursos
-          </Link>
-          <Link className="btn" style={{ width: 'auto', height: 44, fontSize: 13 }} to="/escuelas/alumnos">
-            Alumnos de mi escuela
-          </Link>
-        </div>
-      </AppCard>
+      <PostCard
+        avatarLetter={titulo}
+        title={titulo}
+        subtitle={subtitulo}
+        bannerIcon="school"
+        bannerChips={[
+          `${cursos.length} curso${cursos.length === 1 ? '' : 's'}`,
+          ...(esPlurigrado ? ['Plurigrado rural'] : []),
+        ]}
+        bannerBottom={
+          <>
+            {!esPlurigrado && escuela.id && btn('menu_book', 'Gestionar cursos', `/escuelas/${escuela.id}/cursos?nombre=${encodeURIComponent(titulo)}`)}
+            {btn('event_note', 'Ver operativos', '/operativos')}
+          </>
+        }
+        body={
+          esPlurigrado ? (
+            <p style={{ fontSize: 12, fontStyle: 'italic' }}>
+              Escuela plurigrado rural: no necesita cursos. Los alumnos se registran sin curso.
+            </p>
+          ) : undefined
+        }
+      />
+      {editando && (
+        <Modal title="Completar datos de mi escuela" saving={saving} onSave={guardar} onCancel={() => setEditando(false)}>
+          <Field label="Nombre *"><TextInput value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} /></Field>
+          <Field label="CUE"><TextInput value={form.cue} onChange={(e) => setForm({ ...form, cue: e.target.value })} /></Field>
+          <Field label="Sector de gestión">
+            <SelectInput value={form.sector_gestion} onChange={(e) => setForm({ ...form, sector_gestion: e.target.value })}>
+              <option value="">…</option>
+              {SECTORES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </SelectInput>
+          </Field>
+          <Field label="Modalidad educativa">
+            <SelectInput value={form.modalidad_educativa} onChange={(e) => setForm({ ...form, modalidad_educativa: e.target.value })}>
+              <option value="">…</option>
+              {MODALIDADES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </SelectInput>
+          </Field>
+          <Field label="Teléfono"><TextInput value={form.telefono} onChange={(e) => setForm({ ...form, telefono: e.target.value })} /></Field>
+          <Field label="Localidad"><TextInput value={form.localidad} onChange={(e) => setForm({ ...form, localidad: e.target.value })} /></Field>
+        </Modal>
+      )}
     </div>
   );
 }

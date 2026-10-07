@@ -25,7 +25,7 @@ interface AuthState {
   usuario: UsuarioSesion | null;
   permisos: Set<string>;
   acciones: Accion[];
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, recordarme?: boolean) => Promise<void>;
   logout: () => Promise<void>;
   refrescarSesion: () => Promise<void>;
   can: (permiso: string) => boolean;
@@ -104,9 +104,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [logoutLocal, refrescarSesion]);
 
   const login = useCallback(
-    async (email: string, password: string) => {
+    async (email: string, password: string, recordarme = false) => {
       const { data } = await authApi.post('/token/', { email, password });
-      tokenStore.save(data.access, data.refresh);
+      tokenStore.save(data.access, data.refresh, recordarme);
       try {
         await refrescarSesion();
       } catch {

@@ -26,7 +26,7 @@ export default function Escuelas() {
   useEffect(() => {
     (async () => {
       try {
-        const { data } = await v1Api.get('/escuelas/');
+        const { data } = await v1Api.get('/escuelas/?activa=true');
         setEscuelas(Array.isArray(data) ? data : data.results ?? []);
       } catch (e) {
         toast.push('error', apiErrorMessage(e, 'No se pudieron cargar las escuelas'));
@@ -43,11 +43,6 @@ export default function Escuelas() {
       <PageHeader
         title="Escuelas"
         backTo="/inicio"
-        action={
-          <button className="btn" style={{ width: 'auto', height: 40 }} onClick={() => nav('/escuelas/nuevo')}>
-            + Nueva
-          </button>
-        }
       />
       {escuelas.length === 0 ? (
         <EmptyState titulo="No hay escuelas registradas" subtitulo="Creá una para comenzar" />
@@ -63,7 +58,25 @@ export default function Escuelas() {
                   <div style={{ fontWeight: 600, fontSize: 16, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {e.nombre}
                   </div>
-                  {sub && <div style={{ fontSize: 12, color: 'rgba(45,45,58,.6)', marginTop: 4 }}>{sub}</div>}
+                  {sub && <div style={{ fontSize: 12, color: 'var(--texto-suave)', marginTop: 4 }}>{sub}</div>}
+                  {(() => {
+                    // Solo cuentan los usuarios activos: con todos inactivos la
+                    // escuela queda sin acceso y muestra la advertencia.
+                    const asociados = (Array.isArray(e.usuarios_asociados) ? e.usuarios_asociados : [])
+                      .filter((u: any) => u.is_active !== false);
+                    if (asociados.length === 0) {
+                      return (
+                        <div style={{ marginTop: 6 }}>
+                          <span className="badge warn">Sin usuario asociado</span>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div style={{ fontSize: 12, color: 'var(--texto-suave)', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        Usuario: {asociados.map((u: any) => (u.nombre && String(u.nombre).trim()) ? u.nombre : u.email).join(' • ')}
+                      </div>
+                    );
+                  })()}
                 </div>
               </AppCard>
             </div>

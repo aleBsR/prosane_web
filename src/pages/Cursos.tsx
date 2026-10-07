@@ -12,6 +12,7 @@ export default function Cursos() {
   const [edit, setEdit] = useState<any | 'nuevo' | null>(null);
   const [form, setForm] = useState({ grado: '', division: '', ciclo: '' });
   const [saving, setSaving] = useState(false);
+  const [elim, setElim] = useState<any | null>(null);
 
   async function cargar() {
     if (!escuelaId) return;
@@ -65,13 +66,14 @@ export default function Cursos() {
   }
 
   async function eliminar(c: any) {
-    if (!confirm(`¿Eliminar ${c.sala_grado_anio} ${c.division}?`)) return;
     try {
       await v1Api.delete(`/escuelas/${escuelaId}/cursos/${c.id}/`);
       toast.push('ok', 'Curso eliminado');
       cargar();
     } catch (e) {
       toast.push('error', apiErrorMessage(e, 'No se pudo eliminar'));
+    } finally {
+      setElim(null);
     }
   }
 
@@ -99,7 +101,7 @@ export default function Cursos() {
               <button className="btn btn-secondary" style={{ width: 'auto' }} onClick={() => abrir(c)}>
                 Editar
               </button>
-              <button className="btn btn-secondary" style={{ width: 'auto', color: 'var(--error)' }} onClick={() => eliminar(c)}>
+              <button className="btn btn-secondary" style={{ width: 'auto', color: 'var(--error)' }} onClick={() => setElim(c)}>
                 Eliminar
               </button>
             </div>
@@ -117,6 +119,11 @@ export default function Cursos() {
           <Field label="Ciclo lectivo" hint="Ej: 2026">
             <TextInput type="number" value={form.ciclo} onChange={(e) => setForm({ ...form, ciclo: e.target.value })} />
           </Field>
+        </Modal>
+      )}
+      {elim && (
+        <Modal title={`¿Eliminar ${elim.sala_grado_anio} ${elim.division}?`} saveLabel="Sí" cancelLabel="No" onSave={() => eliminar(elim)} onCancel={() => setElim(null)}>
+          Esta acción no se puede deshacer.
         </Modal>
       )}
     </div>

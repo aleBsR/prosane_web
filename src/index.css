@@ -1,9 +1,8 @@
 /* PROSANE web — tokens espejo de la app móvil (app_colors, app_typography). */
 :root {
+  color-scheme: light;
   --primario: #7c5cfc;
   --primario-oscuro: #6c4de0;
-  --grad-inicio: #9b7df0;
-  --grad-fin: #7b5be0;
   --campo: #f1f0f5;
   --error: #c0392b;
   --texto: #2d2d3a;
@@ -12,8 +11,82 @@
   --gris: #9ca3af;
   --ok: #2e7d32;
   --ok-fondo: #e8f5e9;
+  --info: #1976d2;
+  --texto-suave: rgba(45, 45, 58, 0.65);
+  /* Texto secundario (CUE, DNI, emails en listas): legible en ambos modos. */
+  --texto-suave: rgba(45, 45, 58, 0.65);
+  /* Fondo general de la app (antes degradado): un solo tono fijo. */
+  --fondo-app: #7b5be0;
   --radius-card: 16px;
   --radius-btn: 12px;
+}
+
+/* Modo oscuro: se activa con data-theme="dark" en <html>. */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --primario: #a78bfa;
+  --primario-oscuro: #8b68f8;
+  --campo: #262633;
+  --error: #e57373;
+  --texto: #eceaf4;
+  --link: #b39df5;
+  --gris: #9ca3af;
+  --ok: #81c784;
+  --ok-fondo: #1d2b1f;
+  --info: #64b5f6;
+  --fondo-app: #251c50;
+  --superficie: #1e1e2a;
+  --hover: #2b2b3a;
+  --texto-suave: rgba(236, 234, 244, 0.65);
+}
+
+[data-theme="dark"] .topbar,
+[data-theme="dark"] .user-menu,
+[data-theme="dark"] .post-menu,
+[data-theme="dark"] .toast {
+  background: var(--superficie);
+}
+
+[data-theme="dark"] .card {
+  background: rgba(30, 30, 42, 0.96);
+}
+
+[data-theme="dark"] .field input:focus,
+[data-theme="dark"] .field select:focus,
+[data-theme="dark"] .field textarea:focus {
+  background: var(--superficie);
+}
+
+[data-theme="dark"] .tile:hover,
+[data-theme="dark"] .post-action-btn--secondary:hover {
+  background: var(--hover);
+}
+
+[data-theme="dark"] .info-box,
+[data-theme="dark"] .empty,
+[data-theme="dark"] .tilde-chip,
+[data-theme="dark"] .asistencia-row,
+[data-theme="dark"] .ausente-note,
+[data-theme="dark"] .carga-hint,
+[data-theme="dark"] .post-subtitle {
+  color: var(--texto-suave);
+}
+
+/* Estados: se aclaran para no "borrarse" sobre superficies dark. */
+[data-theme="dark"] .tilde-chip.tilde-ok,
+[data-theme="dark"] .asistencia-select--presente,
+[data-theme="dark"] .estado-pill--presente {
+  color: #81c784;
+}
+
+[data-theme="dark"] .asistencia-select--ausente,
+[data-theme="dark"] .estado-pill--ausente {
+  color: #e57373;
+}
+
+[data-theme="dark"] .asistencia-select--evaluado,
+[data-theme="dark"] .estado-pill--evaluado {
+  color: #64b5f6;
 }
 
 * {
@@ -24,7 +97,7 @@ body {
   margin: 0;
   font-family: 'Rubik', system-ui, sans-serif;
   color: var(--texto);
-  background: linear-gradient(180deg, var(--grad-inicio), var(--grad-fin));
+  background: var(--fondo-app);
   background-attachment: fixed;
   min-height: 100vh;
 }
@@ -148,7 +221,7 @@ a {
   height: 40px;
   border-radius: 50%;
   border: 0;
-  background: linear-gradient(135deg, var(--grad-inicio), var(--grad-fin));
+  background: var(--primario);
   color: #fff;
   font-family: 'Nunito', sans-serif;
   font-weight: 900;
@@ -162,6 +235,25 @@ a {
 
 .avatar:hover {
   filter: brightness(1.08);
+}
+
+/* Botón luna/sol del modo oscuro (junto al avatar). */
+.theme-btn {
+  border: 0;
+  background: transparent;
+  color: var(--texto);
+  cursor: pointer;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.theme-btn:hover {
+  background: var(--campo);
 }
 
 .avatar-sm {
@@ -226,6 +318,39 @@ a {
   padding: 18px 16px 40px;
 }
 
+/* Pie legal: leyenda de protección de datos en todas las pantallas. */
+.footer-legal {
+  margin-top: auto;
+  padding: 16px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.footer-legal strong {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 4px;
+  color: #fff;
+}
+
+.footer-link {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.85);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-family: inherit;
+}
+
+.footer-link:hover {
+  color: #fff;
+}
+
 @media (max-width: 640px) {
   .topbar-inner {
     gap: 8px;
@@ -273,7 +398,7 @@ a {
   padding: 0 20px;
   border: 0;
   border-radius: var(--radius-btn);
-  background: linear-gradient(135deg, var(--grad-inicio), var(--grad-fin));
+  background: var(--primario);
   color: #fff;
   font-family: 'Rubik', sans-serif;
   font-weight: 600;
@@ -291,6 +416,44 @@ a {
   background: transparent;
   color: var(--link);
   height: 44px;
+}
+
+/* Navegación del wizard: Atrás/Siguiente con igual ancho y alto (espejo móvil). */
+.wizard-nav {
+  display: flex;
+  gap: 8px;
+}
+
+.wizard-nav > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.wizard-nav .btn {
+  height: 52px;
+}
+
+/* Atrás con borde visible (espejo del OutlinedButton móvil). */
+.wizard-nav .btn-secondary {
+  border: 1px solid var(--link);
+}
+
+/* Acción terciaria con borde visible (Guardar avance). */
+.btn-link {
+  background: none;
+  border: 1px solid var(--primario);
+  border-radius: var(--radius-btn);
+  cursor: pointer;
+  color: var(--primario);
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 600;
+  padding: 10px 16px;
+}
+
+.btn-link:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .field {
@@ -428,7 +591,7 @@ table.grid th {
 .badge {
   display: inline-block;
   padding: 4px 10px;
-  border-radius: 8px;
+  border-radius: 14px;
   font-size: 11px;
   font-weight: 700;
   color: #fff;
@@ -437,6 +600,10 @@ table.grid th {
 
 .badge.ok {
   background: #2e7d32;
+}
+
+.badge.warn {
+  background: #b7791f;
 }
 
 .actions-row {
@@ -698,7 +865,28 @@ table.grid th {
   margin-top: 14px;
   background: var(--campo);
   border-radius: 14px;
-  padding: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.post-banner .post-banner-icon {
+  margin-bottom: 0;
+}
+
+.post-banner .actions-row {
+  margin-top: 0;
+}
+
+.banner-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.banner-chips .post-chip {
+  margin: 0;
 }
 
 .post-banner-icon {
@@ -810,6 +998,27 @@ table.grid th {
   max-width: 640px;
 }
 
+/* Modal compacto de confirmación (botones lado a lado). */
+.modal-card-sm {
+  max-width: 380px;
+}
+
+.modal-actions-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.modal-actions-row > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.modal-actions-row .btn {
+  height: 44px;
+  font-size: 14px;
+}
+
 .tile {
   display: flex;
   align-items: center;
@@ -915,4 +1124,268 @@ table.grid th {
   margin: 4px 0 0;
   font-size: 13px;
   color: #ede9fe;
+}
+
+/* Login espejo de login_screen.dart: título + subtítulo centrados en la tarjeta. */
+.login-title {
+  font-size: 24px;
+  text-align: center;
+}
+
+.login-subtitle {
+  font-size: 14px;
+  color: var(--texto);
+  text-align: center;
+  margin: 6px 0 20px;
+}
+
+/* PasswordInput: input con ojo adentro (espejo del suffixIcon de AppTextField). */
+.password-wrap {
+  position: relative;
+}
+
+.password-wrap input {
+  padding-right: 44px;
+}
+
+.password-eye {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 0;
+  background: transparent;
+  color: var(--link);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+}
+
+.password-eye:hover {
+  background: rgba(124, 92, 252, 0.12);
+}
+
+/* AppSwitch: fila tappable con switch + label (espejo de app_switch.dart). */
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 4px 0;
+  user-select: none;
+}
+
+.switch {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  border: 0;
+  border-radius: 13px;
+  background: #c4c4d4;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+
+.switch-on {
+  background: var(--primario);
+}
+
+.switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: left 0.2s;
+}
+
+.switch-on .switch-thumb {
+  left: 21px;
+}
+
+.switch-label {
+  font-size: 14px;
+  color: var(--texto);
+}
+
+/* Detalle alumno espejo móvil (DetailPostCard + PostChipCustom + PostActionButton).
+   Los botones van un poco más cuadrados que en el móvil (8px vs pill 24). */
+.tilde-chip {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(156, 163, 175, 0.15);
+  border: 1px solid rgba(156, 163, 175, 0.4);
+  color: rgba(45, 45, 58, 0.7);
+  white-space: nowrap;
+}
+
+.tilde-chip.tilde-ok {
+  background: rgba(76, 175, 80, 0.15);
+  border-color: rgba(76, 175, 80, 0.4);
+  color: #388e3c;
+}
+
+.post-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--primario);
+  color: #fff;
+  font-family: 'Rubik', sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  width: auto;
+}
+
+.post-action-btn:hover {
+  background: var(--primario-oscuro);
+}
+
+.post-action-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.post-action-btn:disabled:hover {
+  background: var(--primario);
+}
+
+.post-action-btn--secondary {
+  background: var(--campo);
+  color: var(--primario);
+}
+
+.post-action-btn--secondary:hover {
+  background: #e9e6f5;
+}
+
+.post-action-btn .msym {
+  font-size: 16px;
+}
+
+/* Selector de asistencia compacto con color por estado (espejo móvil). */
+.asistencia-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(45, 45, 58, 0.8);
+}
+
+.asistencia-row .msym {
+  font-size: 14px;
+}
+
+.asistencia-row .asistencia-select {
+  width: 140px;
+  height: 32px;
+  font-family: 'Rubik', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 8px;
+  border: 1px solid;
+  padding: 4px 8px;
+  outline: none;
+}
+
+.asistencia-select--presente {
+  background: rgba(76, 175, 80, 0.12);
+  border-color: rgba(56, 142, 60, 0.3);
+  color: #388e3c;
+}
+
+.asistencia-select--ausente {
+  background: rgba(244, 67, 54, 0.1);
+  border-color: rgba(211, 47, 47, 0.3);
+  color: #d32f2f;
+}
+
+.asistencia-select--evaluado {
+  background: rgba(33, 150, 243, 0.1);
+  border-color: rgba(25, 118, 210, 0.3);
+  color: #1976d2;
+}
+
+.asistencia-select--pendiente {
+  background: rgba(156, 163, 175, 0.1);
+  border-color: rgba(156, 163, 175, 0.3);
+  color: var(--texto);
+}
+
+/* Píldora de asistencia en solo lectura (espejo móvil). */
+.estado-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  border: 1px solid;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.estado-pill .msym {
+  font-size: 12px;
+}
+
+.estado-pill--presente {
+  background: rgba(76, 175, 80, 0.12);
+  border-color: rgba(56, 142, 60, 0.3);
+  color: #388e3c;
+}
+
+.estado-pill--ausente {
+  background: rgba(244, 67, 54, 0.1);
+  border-color: rgba(211, 47, 47, 0.3);
+  color: #d32f2f;
+}
+
+.estado-pill--evaluado {
+  background: rgba(33, 150, 243, 0.1);
+  border-color: rgba(25, 118, 210, 0.3);
+  color: #1976d2;
+}
+
+.estado-pill--pendiente {
+  background: rgba(156, 163, 175, 0.1);
+  border-color: rgba(156, 163, 175, 0.3);
+  color: var(--texto);
+}
+
+.ausente-note {
+  font-size: 11px;
+  font-style: italic;
+  color: rgba(45, 45, 58, 0.6);
+  margin: 2px 0 0;
+}
+
+.carga-hint {
+  font-size: 10px;
+  color: rgba(45, 45, 58, 0.5);
+  margin-top: 4px;
+}
+
+/* Links del login a todo el ancho y centrados (espejo de AppLink expand). */
+.login-link {
+  display: block;
+  text-align: center;
+  font-size: 14px;
+  margin: 10px 0;
 }

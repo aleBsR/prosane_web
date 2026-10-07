@@ -2,14 +2,14 @@ import { useEffect, useState } from 'react';
 import { v1Api, apiErrorMessage } from '../api/client';
 import { AppButton, AppCard, EmptyState, Field, Modal, PageHeader, RowMenu, SelectInput, TextInput, useToast } from '../components/ui';
 
-// ABM espejo de las pantallas móviles (usuarios_escuela / usuarios_ayudantes):
+// ABM espejo de las pantallas móviles (usuarios_escuela / usuarios_administrativos):
 // filas con ⋯ (Editar), reenvío temporal dentro del diálogo de edición y
 // botón "Nuevo usuario" abajo.
 export function UsuariosEscuela() {
   return <UsuariosABM titulo="Usuarios de escuelas" endpoint="/usuarios/escuelas/" conEscuela subtituloVacio="Creá uno para asignarle una escuela" />;
 }
-export function UsuariosAyudantes() {
-  return <UsuariosABM titulo="Usuarios ayudantes" endpoint="/usuarios/ayudantes/" conEscuela={false} subtituloVacio="Creá uno para asignarle tareas de gestión" />;
+export function UsuariosAdministrativos() {
+  return <UsuariosABM titulo="Usuarios administrativos" endpoint="/usuarios/administrativos/" conEscuela={false} subtituloVacio="Creá uno para asignarle tareas de gestión" />;
 }
 
 function UsuariosABM({ titulo, endpoint, conEscuela, subtituloVacio }: { titulo: string; endpoint: string; conEscuela: boolean; subtituloVacio: string }) {
@@ -28,7 +28,7 @@ function UsuariosABM({ titulo, endpoint, conEscuela, subtituloVacio }: { titulo:
       const { data } = await v1Api.get(endpoint);
       setLista(Array.isArray(data) ? data : data.results ?? []);
       if (conEscuela) {
-        const e = await v1Api.get('/escuelas/');
+        const e = await v1Api.get('/escuelas/?activa=true');
         setEscuelas(Array.isArray(e.data) ? e.data : e.data.results ?? []);
       }
     } catch (e) {
@@ -99,7 +99,7 @@ function UsuariosABM({ titulo, endpoint, conEscuela, subtituloVacio }: { titulo:
   if (loading) return <AppCard>Cargando…</AppCard>;
   return (
     <div>
-      <PageHeader title={titulo} backTo="/gestion-usuarios" />
+      <PageHeader title={titulo} backTo="/inicio" />
       {lista.length === 0 ? (
         <EmptyState titulo={`No hay ${titulo.toLowerCase()}`} subtitulo={subtituloVacio} />
       ) : (
@@ -111,8 +111,8 @@ function UsuariosABM({ titulo, endpoint, conEscuela, subtituloVacio }: { titulo:
                   <div style={{ fontWeight: 600, fontSize: 16, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {u.email}
                   </div>
-                  <div style={{ fontSize: 12, color: 'rgba(45,45,58,.6)', marginTop: 4 }}>
-                    {conEscuela ? u.escuela_nombre || 'Sin escuela asignada' : 'Ayudante'}
+                  <div style={{ fontSize: 12, color: 'var(--texto-suave)', marginTop: 4 }}>
+                    {conEscuela ? u.escuela_nombre || 'Sin escuela asignada' : 'Administrativo'}
                   </div>
                   {!u.is_active && <div style={{ fontSize: 12, color: 'var(--error)', marginTop: 4 }}>Cuenta desactivada</div>}
                 </div>
@@ -145,7 +145,7 @@ function UsuariosABM({ titulo, endpoint, conEscuela, subtituloVacio }: { titulo:
           )}
           {edit !== 'nuevo' && (
             <>
-              <div className="info-box">La contraseña solo la gestiona el propio usuario. No es visible para el admin.</div>
+              <div className="info-box">La contraseña solo la gestiona el propio usuario. No es visible para el administrativo.</div>
               <AppButton label={reenv ? 'Reenviando…' : 'Reenviar temporal (72h)'} disabled={reenv} secondary onClick={reenviar} />
             </>
           )}

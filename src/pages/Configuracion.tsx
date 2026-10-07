@@ -37,7 +37,7 @@ export default function Configuracion() {
               </span>
               <span style={{ flex: 1 }}>
                 <div style={{ fontWeight: 600, fontSize: 16 }}>{o.titulo}</div>
-                <div style={{ fontSize: 12, color: 'rgba(45,45,58,.6)', marginTop: 4 }}>{o.subtitulo}</div>
+                <div style={{ fontSize: 12, color: 'var(--texto-suave)', marginTop: 4 }}>{o.subtitulo}</div>
               </span>
               <MIcon name="chevron_right" />
             </div>
@@ -46,7 +46,7 @@ export default function Configuracion() {
       ))}
       <AppCard>
         <h3>Acerca de</h3>
-        <div style={{ fontSize: 12, color: 'rgba(45,45,58,.6)' }}>PROSANE Salta — v1.0.0</div>
+        <div style={{ fontSize: 12, color: 'var(--texto-suave)' }}>PROSANE Salta — v1.0.0</div>
         <div style={{ fontSize: 12, marginTop: 2 }}>Si necesitás ayuda contactá a soporte.</div>
       </AppCard>
     </div>

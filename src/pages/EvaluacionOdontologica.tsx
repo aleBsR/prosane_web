@@ -249,7 +249,7 @@ export default function EvaluacionOdontologica() {
   const ro = !enCurso;
 
   // Bloquea salidas (botón atrás, links, recarga) con cambios sin guardar.
-  const blocker = useBlocker(tieneCambios && enCurso && !loading);
+  const blocker = useBlocker(tieneCambios && enCurso && !loading && !saving);
   const pieza = (n: string) => odonto[n] ?? piezaVacia();
 
   function abrirPieza(n: string) {
@@ -293,7 +293,10 @@ export default function EvaluacionOdontologica() {
       });
       marcarGuardado();
       if (!parcial) toast.push('ok', okMsg);
-      if (!parcial) nav(`/operativos/${opId}/alumnos/${alumnoId}`);
+      if (!parcial) {
+        nav(`/operativos/${opId}`, { replace: true });
+        nav(`/operativos/${opId}/alumnos/${alumnoId}`);
+      }
       return true;
     } catch (e) {
       const m = apiErrorMessage(e, 'No se pudo guardar la evaluación.');

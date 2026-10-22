@@ -619,6 +619,19 @@ table.grid th {
   font-size: 13px;
 }
 
+/* Input + botón Validar en la misma fila (Profesionales): el botón no debe
+   estirarse al 100% ni aplastar el input. */
+.input-btn-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.input-btn-row .btn {
+  width: auto;
+  flex-shrink: 0;
+}
+
 /* Íconos Material outline (los mismos de la app), monocromos por contexto. */
 .msym {
   font-family: 'Material Symbols Outlined', sans-serif;

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useBlocker, useNavigate, useParams } from 'react-router-dom';
+import { useBlocker, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { v1Api, apiErrorMessage } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { AppButton, AppCard, Field, MIcon, Modal, PageHeader, SelectInput, TextInput, useToast } from '../components/ui';
@@ -151,6 +151,8 @@ function TituloFicha({ icono, titulo }: { icono: string; titulo: string }) {
 // ficha de M y O.
 export default function EscuelaDatos() {
   const { opId, alumnoId } = useParams();
+  const [sp] = useSearchParams();
+  const soloLectura = sp.get('soloLectura') === '1';
   const nav = useNavigate();
   const { can, usuario } = useAuth();
   const toast = useToast();
@@ -160,32 +162,25 @@ export default function EscuelaDatos() {
   const [raw, setRaw] = useState<any>(null);
   const [f, setF] = useState<any>({});
   const [paso, setPaso] = useState(0);
-  // Sección escuela (paso 3): se carga junto pero solo se guarda si se visita.
-  const [ePreocupa, setEPreocupa] = useState(false);
-  const [eDetalle, setEDetalle] = useState('');
-  const [eLenguaje, setELenguaje] = useState(false);
-  const [eTratamiento, setETratamiento] = useState(false);
-  const [eVisitado, setEVisitado] = useState(false);
+  const [reloadTick, setReloadTick] = useState(0);
+  const [tutorForm, setTutorForm] = useState({ nombre: '', apellido: '', dni: '', tipo_dni: 'DNI', parentesco: '', sexo: '', fecha_nacimiento: '' });
+  const [savingTutor, setSavingTutor] = useState(false);
+  const [validandoTutor, setValidandoTutor] = useState(false);
+  const [valTutor, setValTutor] = useState<string | null>(null);
   // Firma de lo último persistido para el dirty guard.
   const firmaGuardada = useRef('');
 
   // Pasos del wizard (A en 3 partes + E + revisión). Mismo orden que la app.
   const TITULOS_PASOS = [
     'Datos del niño', 'Domicilio y cobertura', 'Antecedentes',
-    'Sección escuela', 'Revisión',
+    'Tutor (responsable)', 'Revisión',
   ];
 
   const set = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }));
-  const setPreocupa = (v: boolean) => {
-    setEPreocupa(v);
-    if (!v) setEDetalle('');
-  };
 
   // Firma del estado para detectar cambios sin guardar (dirty guard).
   function firmaActual(): string {
-    return JSON.stringify({
-      f, ePreocupa, eDetalle, eLenguaje, eTratamiento,
-    });
+    return JSON.stringify({ f });
   }
   function marcarGuardado() {
     firmaGuardada.current = firmaActual();
@@ -195,14 +190,13 @@ export default function EscuelaDatos() {
   useEffect(() => {
     (async () => {
       try {
-        const [op, datos, seccion] = await Promise.all([
+        const [op, datos] = await Promise.all([
           v1Api.get(`/operativos/${opId}/`),
           v1Api.get(`/operativos/${opId}/alumnos/${alumnoId}/datos/`),
-          v1Api.get(`/operativos/${opId}/alumnos/${alumnoId}/seccion-escuela/`).catch(() => ({ data: {} })),
         ]);
         const bloqueado = op.data.estado === 'finalizado' || op.data.estado === 'cancelado';
         const puede = can('cargarAntecedentesNino') || usuario?.rolName === 'superadmin';
-        setNoEditable(bloqueado || !puede);
+        setNoEditable(bloqueado || !puede || soloLectura);
         const d = datos.data ?? {};
         setRaw(d);
         setF({
@@ -222,13 +216,22 @@ export default function EscuelaDatos() {
           ultima_consulta_medica: d.antecedentes?.ultima_consulta_medica ?? 'NINGUNA',
           otros_problemas_salud: d.antecedentes?.otros_problemas_salud ?? '',
         });
-        const sec = seccion.data ?? {};
-        const preocupa = !!sec.escuela_preocupa_salud;
-        const detalle = preocupa ? (sec.escuela_preocupa_detalle ?? '') : '';
-        setEPreocupa(preocupa);
-        setEDetalle(detalle);
-        setELenguaje(!!sec.escuela_dificultad_lenguaje);
-        setETratamiento(!!sec.escuela_bajo_tratamiento);
+        const t = d.tutor ?? null;
+        if (t) {
+          setTutorForm({
+            nombre: t.nombre ?? '',
+            apellido: t.apellido ?? '',
+            dni: t.dni ?? '',
+            tipo_dni: t.tipo_dni || 'DNI',
+            parentesco: t.parentesco ?? '',
+            sexo: t.sexo ?? '',
+            fecha_nacimiento: (t.fecha_nacimiento ?? '').toString().slice(0, 10),
+          });
+          setValTutor('ok');
+        } else {
+          setTutorForm({ nombre: '', apellido: '', dni: '', tipo_dni: 'DNI', parentesco: '', sexo: '', fecha_nacimiento: '' });
+          setValTutor(null);
+        }
         firmaGuardada.current = JSON.stringify({
           f: {
             nombre: d.persona?.nombre ?? d.operativo_alumno?.nombre ?? '',
@@ -247,9 +250,6 @@ export default function EscuelaDatos() {
             ultima_consulta_medica: d.antecedentes?.ultima_consulta_medica ?? 'NINGUNA',
             otros_problemas_salud: d.antecedentes?.otros_problemas_salud ?? '',
           },
-          ePreocupa: preocupa, eDetalle: detalle,
-          eLenguaje: !!sec.escuela_dificultad_lenguaje,
-          eTratamiento: !!sec.escuela_bajo_tratamiento,
         });
       } catch (e) {
         toast.push('error', apiErrorMessage(e, 'No se pudo cargar'));
@@ -258,7 +258,63 @@ export default function EscuelaDatos() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [opId, alumnoId]);
+  }, [opId, alumnoId, reloadTick]);
+
+  async function validarTutor() {
+    if (!tutorForm.dni.trim()) { toast.push('error', 'Ingresá el DNI primero'); return; }
+    setValidandoTutor(true);
+    try {
+      const params = new URLSearchParams({ dni: tutorForm.dni.trim(), ...(tutorForm.sexo ? { sexo: tutorForm.sexo } : {}), tipo_dni: tutorForm.tipo_dni || 'DNI' });
+      const { data } = await v1Api.get('/validar-dni/?' + params.toString());
+      const d: any = data?.persona ?? data ?? {};
+      const apellido = d.apellido ?? d.apellidos ?? d.lastName ?? '';
+      const nombres = d.nombres ?? d.nombre ?? d.firstName ?? '';
+      const fecha = d.fecha_nacimiento ?? d.fechaNacimiento ?? d.fecha_nac ?? d.f_nac ?? '';
+      const sx = String(d.sexo ?? d.idSexo ?? '').toUpperCase();
+      const sexoUi = sx === 'M' || sx === 'MASCULINO' || sx === '1' ? 'masculino' : sx === 'F' || sx === 'FEMENINO' || sx === '2' ? 'femenino' : '';
+      setTutorForm((t) => ({
+        ...t,
+        ...(apellido ? { apellido: String(apellido) } : {}),
+        ...(nombres ? { nombre: String(nombres) } : {}),
+        ...(sexoUi ? { sexo: sexoUi } : {}),
+        ...(fecha ? { fecha_nacimiento: String(fecha).slice(0, 10) } : {}),
+      }));
+      setValTutor('ok');
+      toast.push('ok', 'Datos de RENAPER cargados');
+    } catch (e: any) {
+      const manual = e?.response?.status === 404;
+      setValTutor('manual');
+      toast.push(manual ? 'info' : 'error', manual ? 'No está en RENAPER: cargá los datos manual' : apiErrorMessage(e, 'Sin conexión con RENAPER: cargá manual'));
+    } finally {
+      setValidandoTutor(false);
+    }
+  }
+
+  async function guardarTutor() {
+    if (!pacienteId) { toast.push('error', 'No se pudo identificar al alumno'); return; }
+    if (!valTutor) { toast.push('error', 'Validá el DNI del tutor primero'); return; }
+    if ([tutorForm.nombre, tutorForm.apellido, tutorForm.dni, tutorForm.parentesco, tutorForm.sexo, tutorForm.fecha_nacimiento].some((v) => !v.trim())) {
+      toast.push('error', 'Completá todos los datos del tutor'); return;
+    }
+    setSavingTutor(true);
+    try {
+      await v1Api.post('/alumnos/' + pacienteId + '/tutor/', {
+        persona: {
+          nombre: tutorForm.nombre.trim(), apellido: tutorForm.apellido.trim(), dni: tutorForm.dni.trim(),
+          tipo_dni: tutorForm.tipo_dni || 'DNI', sexo: tutorForm.sexo, fecha_nacimiento: tutorForm.fecha_nacimiento,
+        },
+        parentesco: tutorForm.parentesco,
+      });
+      toast.push('ok', 'Tutor vinculado');
+      setTutorForm({ nombre: '', apellido: '', dni: '', tipo_dni: 'DNI', parentesco: '', sexo: '', fecha_nacimiento: '' });
+      setValTutor(null);
+      setReloadTick((t) => t + 1);
+    } catch (e) {
+      toast.push('error', apiErrorMessage(e, 'No se pudo vincular el tutor'));
+    } finally {
+      setSavingTutor(false);
+    }
+  }
 
   // Valida la sección actual (Siguiente bloqueante). Solo el paso 0
   // (datos del niño) tiene obligatorios.
@@ -283,14 +339,11 @@ export default function EscuelaDatos() {
       toast.push('error', msg);
       return;
     }
-    const eAhora = eVisitado || paso === 3;
-    if (paso === 3 && !eVisitado) setEVisitado(true);
-    const ok = await guardarAvanceConE(eAhora);
+    const ok = await guardarAvanceConE();
     if (ok) setPaso(Math.min(paso + 1, 4));
   }
 
   function irAPaso(i: number) {
-    if (i === 3) setEVisitado(true);
     setPaso(Math.max(0, Math.min(i, 4)));
   }
 
@@ -301,35 +354,28 @@ export default function EscuelaDatos() {
       setPaso(0);
       return;
     }
-    await enviar(false, 'Datos personales y familia guardados ✓ (A)', true, eVisitado);
+    await enviar(false, 'Datos personales y familia guardados ✓ (A)', true);
   }
 
   // Guarda el avance sin validar todo ni marcar completado.
   // Devuelve si persistió (para el autoguardado al Siguiente).
-  async function guardarAvanceConE(eIncluirE: boolean): Promise<boolean> {
-    return enviar(true, 'Avance guardado', false, eIncluirE);
+  async function guardarAvanceConE(): Promise<boolean> {
+    return enviar(true, 'Avance guardado', false);
   }
 
-  async function enviar(parcial: boolean, okMsg: string, completar: boolean, eIncluirE: boolean): Promise<boolean> {
+  async function enviar(parcial: boolean, okMsg: string, completar: boolean): Promise<boolean> {
     setSaving(true);
     try {
       await v1Api.patch(`/operativos/${opId}/alumnos/${alumnoId}/datos/`, {
         ...payload(),
         completar,
       });
-      // La sección E solo se guarda si se visitó (paso 3).
-      if (eIncluirE) {
-        await v1Api.patch(`/operativos/${opId}/alumnos/${alumnoId}/seccion-escuela/`, {
-          escuela_preocupa_salud: ePreocupa,
-          escuela_preocupa_detalle: ePreocupa ? eDetalle : '',
-          escuela_dificultad_lenguaje: eLenguaje,
-          escuela_bajo_tratamiento: eTratamiento,
-          completar,
-        });
-      }
       marcarGuardado();
       if (!parcial) toast.push('ok', okMsg);
-      if (!parcial) nav(`/operativos/${opId}/alumnos/${alumnoId}`);
+      if (!parcial) {
+        nav(`/operativos/${opId}`, { replace: true });
+        nav(`/operativos/${opId}/alumnos/${alumnoId}`);
+      }
       return true;
     } catch (e) {
       toast.push('error', apiErrorMessage(e, 'No se pudo guardar'));
@@ -354,7 +400,7 @@ export default function EscuelaDatos() {
 
   // Bloquea salidas (botón atrás, links, recarga) con cambios sin guardar.
   // NOTA: los hooks siempre antes de cualquier return anticipado.
-  const blocker = useBlocker(tieneCambios && !noEditable && !loading);
+  const blocker = useBlocker(tieneCambios && !noEditable && !loading && !saving);
 
   if (loading) return <AppCard>Cargando…</AppCard>;
   const ro = noEditable;
@@ -368,7 +414,7 @@ export default function EscuelaDatos() {
   const fam = raw?.antecedente_familiar ?? null;
   const consent = raw?.consentimiento ?? null;
   const tutor = raw?.tutor ?? null;
-
+  const pacienteId = raw?.paciente?.id ?? null;
   const fichaDatos = (
     <AppCard>
       <TituloFicha icono="person" titulo="Datos personales" />
@@ -421,15 +467,15 @@ export default function EscuelaDatos() {
   ) : null;
 
   const tutorNom = `${tutor?.nombre ?? ''} ${tutor?.apellido ?? ''}`.trim();
-  const fichaFamilia = (fam || consent || tutor) ? (
+  const fichaFamilia = (fam || consent || tutor || !ro) ? (
     <AppCard>
       <TituloFicha icono="family_restroom" titulo="Familia y consentimiento" />
-      {(tutorNom || tutor?.parentesco) && (
-        <Fila
-          label="Responsable"
-          valor={[tutorNom, tutor?.parentesco ? `(${tutor.parentesco})` : '', tutor?.dni ? `DNI ${tutor.dni}` : ''].filter(Boolean).join(' ')}
-        />
-      )}
+      <Fila
+        label="Responsable"
+        valor={(tutorNom || tutor?.parentesco)
+          ? [tutorNom, tutor?.parentesco ? `(${tutor.parentesco})` : '', tutor?.dni ? `DNI ${tutor.dni}` : ''].filter(Boolean).join(' ')
+          : 'Sin cargar'}
+      />
       {consent && (
         <Fila label="Consentimiento" valor={consent.aceptado ? 'Aceptado' : 'Pendiente'} />
       )}
@@ -673,37 +719,68 @@ export default function EscuelaDatos() {
 
           {paso === 3 && (
           <AppCard>
-            <h3>Sección escuela (E)</h3>
-            <Field label="¿Preocupa su salud?">
-              <SelectInput value={ePreocupa ? 'true' : 'false'} onChange={(e) => setPreocupa(e.target.value === 'true')}>
-                <option value="false">No</option>
-                <option value="true">Sí</option>
-              </SelectInput>
-            </Field>
-            {ePreocupa && (
-              <Field label="Detalle de la preocupación">
-                <TextInput value={eDetalle} onChange={(e) => setEDetalle(e.target.value)} />
-              </Field>
-            )}
-            <Field label="¿Dificultad de lenguaje?">
-              <SelectInput value={eLenguaje ? 'true' : 'false'} onChange={(e) => setELenguaje(e.target.value === 'true')}>
-                <option value="false">No</option>
-                <option value="true">Sí</option>
-              </SelectInput>
-            </Field>
-            <Field label="¿Bajo tratamiento?">
-              <SelectInput value={eTratamiento ? 'true' : 'false'} onChange={(e) => setETratamiento(e.target.value === 'true')}>
-                <option value="false">No</option>
-                <option value="true">Sí</option>
-              </SelectInput>
-            </Field>
+            <h3>Tutor (responsable)</h3>
+            <>
+              {tutor && (
+                <p style={{ fontSize: 12, color: 'var(--texto-suave)', marginBottom: 8 }}>
+                  Tutor actual: {[tutor.nombre, tutor.apellido].filter(Boolean).join(' ')}{tutor.parentesco ? ` (${tutor.parentesco})` : ''}{tutor.dni ? ` — DNI ${tutor.dni}` : ''}
+                </p>
+              )}
+
+                <Field label="Tipo de documento">
+                  <SelectInput value={tutorForm.tipo_dni} onChange={(e) => setTutorForm({ ...tutorForm, tipo_dni: e.target.value })}>
+                    <option value="DNI">DNI</option>
+                    <option value="LC">LC</option>
+                    <option value="LE">LE</option>
+                  </SelectInput>
+                </Field>
+                <Field label="DNI del tutor">
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <TextInput value={tutorForm.dni} onChange={(e) => { setTutorForm({ ...tutorForm, dni: e.target.value }); setValTutor(null); }} />
+                    <AppButton label={validandoTutor ? '…' : 'Validar'} disabled={!tutorForm.dni.trim() || validandoTutor} onClick={validarTutor} />
+                  </div>
+                </Field>
+                {valTutor === null && (
+                  <p style={{ fontSize: 12, color: 'var(--texto-suave)' }}>Validá el DNI para autocompletar. Si no está en RENAPER, igual podés cargar manual.</p>
+                )}
+                <Field label="Nombre *"><TextInput value={tutorForm.nombre} disabled={!valTutor} onChange={(e) => setTutorForm({ ...tutorForm, nombre: e.target.value })} /></Field>
+                <Field label="Apellido *"><TextInput value={tutorForm.apellido} disabled={!valTutor} onChange={(e) => setTutorForm({ ...tutorForm, apellido: e.target.value })} /></Field>
+                <Field label="Parentesco">
+                  <SelectInput value={tutorForm.parentesco} disabled={!valTutor} onChange={(e) => setTutorForm({ ...tutorForm, parentesco: e.target.value })}>
+                    <option value="">…</option>
+                    <option value="madre">Madre</option>
+                    <option value="padre">Padre</option>
+                    <option value="tutor_legal">Tutor/a legal</option>
+                    <option value="abuelo">Abuelo/a</option>
+                    <option value="otro">Otro</option>
+                  </SelectInput>
+                </Field>
+                <Field label="Sexo">
+                  <SelectInput value={tutorForm.sexo} disabled={!valTutor} onChange={(e) => setTutorForm({ ...tutorForm, sexo: e.target.value })}>
+                    <option value="">…</option>
+                    <option value="masculino">Masculino</option>
+                    <option value="femenino">Femenino</option>
+                    <option value="otro">Otro</option>
+                  </SelectInput>
+                </Field>
+                <Field label="Fecha de nacimiento *"><TextInput type="date" value={tutorForm.fecha_nacimiento} disabled={!valTutor} onChange={(e) => setTutorForm({ ...tutorForm, fecha_nacimiento: e.target.value })} /></Field>
+                <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                  <AppButton label="Vincular tutor" loading={savingTutor} onClick={guardarTutor} />
+                  {tutor && (
+                    <AppButton label="Cambiar tutor" secondary onClick={() => {
+                      setTutorForm({ nombre: '', apellido: '', dni: '', tipo_dni: 'DNI', parentesco: '', sexo: '', fecha_nacimiento: '' });
+                      setValTutor(null);
+                    }} />
+                  )}
+                </div>
+            </>
           </AppCard>
           )}
 
           {paso === 4 && (
           <AppCard>
             <h3>Revisión</h3>
-            {['Datos del niño', 'Domicilio y cobertura', 'Antecedentes', 'Sección escuela'].map((t, i) => (
+            {['Datos del niño', 'Domicilio y cobertura', 'Antecedentes', 'Tutor (responsable)'].map((t, i) => (
               <div
                 key={t}
                 onClick={() => irAPaso(i)}
@@ -728,9 +805,9 @@ export default function EscuelaDatos() {
             )}
             {paso < 4 ? (
               <AppButton label="Siguiente" loading={saving} onClick={intentarAvanzar} />
-            ) : (
-              <AppButton label="Guardar" loading={saving} onClick={guardar} />
-            )}
+      ) : (
+        <AppButton label="Guardar" loading={saving} onClick={guardar} />
+      )}
           </div>
           </AppCard>
         </>

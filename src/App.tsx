@@ -1,5 +1,6 @@
 import { Navigate, Outlet, createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/AuthContext';
+import { TemaProvider } from './theme/TemaContext';
 import { ToastProvider } from './components/ui';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -124,10 +125,12 @@ const router = createBrowserRouter([
 
 export default function App() {
   return (
-    <ToastProvider>
-      <AuthProvider>
-        <RouterProvider router={router} />
-      </AuthProvider>
-    </ToastProvider>
+    <TemaProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <RouterProvider router={router} />
+        </AuthProvider>
+      </ToastProvider>
+    </TemaProvider>
   );
 }

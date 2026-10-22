@@ -120,12 +120,14 @@ export default function AlumnoDetail() {
             {alumno.completo ? 'Completo' : 'Pendiente'}
           </span>
         }
+        body={undefined}
         menuEntries={[
           ...(puedeConstancia ? [{ value: 'planilla', label: 'Planilla PDF', icon: 'description' }] : []),
           ...(puedeVerFicha ? [{ value: 'datos', label: 'Ver datos', icon: 'visibility' }] : []),
         ]}
         onMenuSelected={(v) => {
           if (v === 'planilla') descargarPlanilla();
+          else if (v === 'datos') nav(`${v}?soloLectura=1`);
           else nav(v);
         }}
         bannerIcon="person_outline"

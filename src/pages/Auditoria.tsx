@@ -38,6 +38,44 @@ export default function Auditoria() {
 
   const set = (k: string, v: any) => setF((p) => ({ ...p, [k]: v }));
 
+  async function exportar(formato: 'xlsx' | 'pdf') {
+    if (f.desde && f.desde > HOY) {
+      toast.push('error', 'La fecha "desde" no puede ser posterior a hoy');
+      return;
+    }
+    if (f.hasta && f.hasta > HOY) {
+      toast.push('error', 'La fecha "hasta" no puede ser posterior a hoy');
+      return;
+    }
+    if (f.desde && f.hasta && f.desde > f.hasta) {
+      toast.push('error', 'La fecha "desde" debe ser menor o igual que "hasta"');
+      return;
+    }
+    setLoading(true);
+    try {
+      const params: any = { formato };
+      if (f.entidad) params.entidad = f.entidad;
+      if (f.accion) params.accion = f.accion;
+      if (f.actor.trim()) params.actor = f.actor.trim();
+      if (f.desde) params.desde = f.desde;
+      if (f.hasta) params.hasta = f.hasta;
+      const { data } = await v1Api.get('/auditoria/cambios/export/', {
+        params, responseType: 'blob',
+      });
+      const url = URL.createObjectURL(new Blob([data]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `auditoria.${formato === 'pdf' ? 'pdf' : 'xlsx'}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.push('ok', `Auditoría exportada (${formato})`);
+    } catch (e) {
+      toast.push('error', apiErrorMessage(e, 'No se pudo exportar'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function cargar() {
     if (f.desde && f.desde > HOY) {
       toast.push('error', 'La fecha "desde" no puede ser posterior a hoy');
@@ -93,6 +131,7 @@ export default function Auditoria() {
   return (
     <div>
       <PageHeader title="Auditoría de cambios" backTo="/inicio" />
+      <div style={{ marginBottom: 16 }}>
       <AppCard>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <div style={{ flex: '1 1 140px' }}>
@@ -127,10 +166,19 @@ export default function Auditoria() {
             </Field>
           </div>
         </div>
-        <div style={{ marginTop: 8 }}>
+        <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <AppButton label="Buscar" loading={loading} onClick={cargar} />
+          <div className="actions-row" style={{ marginTop: 0 }}>
+            <button className="post-action-btn" disabled={loading} onClick={() => exportar('xlsx')}>
+              Exportar Excel
+            </button>
+            <button className="post-action-btn" disabled={loading} onClick={() => exportar('pdf')}>
+              Exportar PDF
+            </button>
+          </div>
         </div>
       </AppCard>
+      </div>
       {loading ? (
         <AppCard>Cargando…</AppCard>
       ) : filas.length === 0 ? (

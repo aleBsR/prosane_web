@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import TemaBoton from '../theme/TemaBoton';
 import { apiErrorMessage } from '../api/client';
 import { AppButton, AppSwitch, Field, PasswordInput, TextInput } from '../components/ui';
 
@@ -34,6 +35,7 @@ export default function Login() {
 
   return (
     <div className="login-wrap">
+      <TemaBoton />
       <div className="login-card">
         <div className="card">
           <h2 className="login-title">Bienvenido</h2>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { apiErrorMessage, authApi } from '../api/client';
 import { AppButton, Field, PasswordReqs, TextInput, passwordChecks, useToast } from '../components/ui';
+import TemaBoton from '../theme/TemaBoton';
 
 export default function ResetPassword() {
   const nav = useNavigate();
@@ -44,6 +45,7 @@ export default function ResetPassword() {
 
   return (
     <div className="login-wrap">
+      <TemaBoton />
       <div className="login-card" style={{ maxWidth: 480 }}>
         <div className="brand">
           <h1>PROSANE</h1>

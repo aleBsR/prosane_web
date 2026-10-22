@@ -146,7 +146,25 @@ export default function EvaluacionMedica() {
     const n = { ...p, [k]: v };
     if (k === 'examen_realizado') {
       if (v) n.motivo_no_examen = '';
-      else n.lugar_examen = '';
+      else {
+        n.lugar_examen = '';
+        n.motivo_no_examen = n.motivo_no_examen || '';
+        // Limpia todos los datos de los pasos siguientes si no hubo examen.
+        n.antropometria_evaluada = false;
+        n.peso = ''; n.talla = ''; n.percentil_talla = ''; n.percentil_imc = '';
+        n.presion_evaluada = false;
+        n.pas = ''; n.pad = ''; n.presion_clasificacion = '';
+        n.agudeza_evaluada = false;
+        n.ojo_derecho = ''; n.ojo_izquierdo = ''; n.usa_lentes = false;
+        n.audiometria_realizada = false;
+        n.audiometria_resultado = '';
+        n.hallazgos = {};
+        n.trajo_carnet = false;
+        n.carnet_completo = false;
+        n.vacunas_aplicadas = '';
+        n.vacunas_indicadas = '';
+        n.derivaciones = {};
+      }
     }
     if (k === 'antropometria_evaluada' && !v) {
       n.peso = ''; n.talla = ''; n.percentil_talla = ''; n.percentil_imc = '';
@@ -226,6 +244,7 @@ export default function EvaluacionMedica() {
           carnet_completo: !!d.carnet_completo,
           vacunas_aplicadas: d.vacunas_aplicadas ?? '',
           vacunas_indicadas: d.vacunas_indicadas ?? '',
+           sexo: d.sexo ?? '',
         };
         setF(f0);
         const ap = str(d.vacunas_aplicadas) !== '' ? 'si' : '';
@@ -235,6 +254,9 @@ export default function EvaluacionMedica() {
         const hRaw = d.hallazgos ?? {};
         const h: Record<string, { estado: string; detalle: string; checks: string[] }> = {};
         for (const s of HALLAZGO_SISTEMAS) {
+          const sexoLower = String(f0.sexo ?? '').toLowerCase();
+          if (s === 'genitourinario_ninos' && sexoLower === 'femenino') continue;
+          if (s === 'genitourinario_ninas' && sexoLower === 'masculino') continue;
           const estado = String(hRaw[s]?.estado ?? 'no_eval');
           // Sanea datos contradictorios legacy (estado != con + checks).
           h[s] = estado === 'con' ? {
@@ -282,6 +304,10 @@ export default function EvaluacionMedica() {
   // persiste antes de avanzar (autoguardado al Siguiente). Si falla la red
   // se queda en el paso con el error para reintentar.
   async function intentarAvanzar() {
+    if (paso === 0 && !f.examen_realizado) {
+      toast.push('info', 'No se realizó el examen: no hay más datos para cargar.');
+      return;
+    }
     const msg = validarPaso(Math.min(paso, 7));
     if (msg) {
       setError(msg);
@@ -296,7 +322,7 @@ export default function EvaluacionMedica() {
   }
 
   // Bloquea salidas (botón atrás, links, recarga) con cambios sin guardar.
-  const blocker = useBlocker(tieneCambios && enCurso && !loading);
+  const blocker = useBlocker(tieneCambios && enCurso && !loading && !saving);
 
   // Valida solo una sección (botón Siguiente bloqueante).
   function validarPaso(paso: number): string | null {
@@ -383,7 +409,10 @@ export default function EvaluacionMedica() {
       });
       marcarGuardado();
       if (!parcial) toast.push('ok', okMsg);
-      if (!parcial) nav(`/operativos/${opId}/alumnos/${alumnoId}`);
+      if (!parcial) {
+        nav(`/operativos/${opId}`, { replace: true });
+        nav(`/operativos/${opId}/alumnos/${alumnoId}`);
+      }
       return true;
     } catch (e) {
       const m = apiErrorMessage(e, 'No se pudo guardar la evaluación.');
@@ -421,7 +450,14 @@ export default function EvaluacionMedica() {
         audiometria_realizada: !!f.audiometria_realizada,
         audiometria_resultado: f.audiometria_resultado || '',
         hallazgos: Object.fromEntries(
-          Object.entries(hallazgos).map(([k, v]) => [k, { estado: v.estado, detalle: v.detalle, checks: v.checks }]),
+          Object.entries(hallazgos)
+            .filter(([k]) => {
+              const sx = String(f.sexo ?? '').toLowerCase();
+              if (k === 'genitourinario_ninos' && sx === 'femenino') return false;
+              if (k === 'genitourinario_ninas' && sx === 'masculino') return false;
+              return true;
+            })
+            .map(([k, v]) => [k, { estado: v.estado, detalle: v.detalle, checks: v.checks }]),
         ),
         derivaciones: Object.fromEntries(Object.entries(derivs).map(([k, v]) => [k, { deriva: v.deriva, motivo: v.motivo }])),
       };
@@ -503,20 +539,23 @@ export default function EvaluacionMedica() {
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {TITULOS_PASOS.map((t, i) => (
+              (i > 0 && !f.examen_realizado) ? null : (
               <button
                 key={t}
                 type="button"
                 title={t}
-                onClick={() => setPaso(i)}
+                onClick={() => { if (i === 0 || f.examen_realizado) setPaso(i); }}
                 style={{
-                  width: 26, height: 26, borderRadius: '50%', border: 'none', cursor: 'pointer',
+                  width: 26, height: 26, borderRadius: '50%', border: 'none', cursor: (i === 0 || f.examen_realizado) ? 'pointer' : 'not-allowed',
                   fontSize: 12, fontWeight: 700,
                   background: i === paso ? 'var(--primario)' : 'rgba(0,0,0,.08)',
                   color: i === paso ? '#fff' : 'inherit',
+                  opacity: (i === 0 || f.examen_realizado) ? 1 : 0.35,
                 }}
               >
                 {i + 1}
               </button>
+              )
             ))}
           </div>
         </AppCard>
@@ -646,7 +685,12 @@ export default function EvaluacionMedica() {
         {paso === 4 && (
         <AppCard>
           <h3>Hallazgos clínicos</h3>
-          {HALLAZGO_SISTEMAS.map((s) => {
+          {HALLAZGO_SISTEMAS.filter((s) => {
+            const sx = String(f.sexo ?? '').toLowerCase();
+            if (s === 'genitourinario_ninos' && sx === 'femenino') return false;
+            if (s === 'genitourinario_ninas' && sx === 'masculino') return false;
+            return true;
+          }).map((s) => {
             const h = hallazgos[s] ?? { estado: 'no_eval', detalle: '', checks: [] };
             const conHallazgos = h.estado === 'con';
             const checks = HALLAZGO_CHECKS[s] ?? [];
@@ -786,10 +830,10 @@ export default function EvaluacionMedica() {
             {paso > 0 && (
               <AppButton label="Atrás" secondary onClick={() => setPaso(Math.max(0, paso - 1))} />
             )}
-            {paso < 7 ? (
-              <AppButton label="Siguiente" loading={saving} onClick={intentarAvanzar} />
-            ) : (
+            {(!f.examen_realizado || paso >= 7) ? (
               <AppButton label="Guardar" loading={saving} onClick={guardar} />
+            ) : (
+              <AppButton label="Siguiente" loading={saving} onClick={intentarAvanzar} />
             )}
           </div>
         </AppCard>

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import TemaBoton from '../theme/TemaBoton';
 
 // El registro de tutores está fuera del alcance de esta etapa en la web
 // (igual que el perfil tutor: ver TutorFueraDeAlcance). Existe como ruta
@@ -6,6 +7,7 @@ import { Link } from 'react-router-dom';
 export default function Signup() {
   return (
     <div className="login-wrap">
+      <TemaBoton />
       <div className="login-card">
         <div className="card empty">
           <h3>Registro</h3>

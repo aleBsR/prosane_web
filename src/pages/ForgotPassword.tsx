@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiErrorMessage, authApi } from '../api/client';
 import { AppButton, Field, TextInput, useToast } from '../components/ui';
+import TemaBoton from '../theme/TemaBoton';
 
 export default function ForgotPassword() {
   const nav = useNavigate();
@@ -16,7 +17,7 @@ export default function ForgotPassword() {
     try {
       await authApi.post('/reset-password/', { email: email.trim() });
       toast.push('ok', 'Si el correo está registrado, te enviamos un código de 6 dígitos (vence en 30 min).');
-      nav('/reset-password', { state: { email: email.trim() } });
+      nav('/reset-password', { replace: true, state: { email: email.trim() } });
     } catch (e) {
       const msg = apiErrorMessage(e);
       setError(msg);
@@ -28,6 +29,7 @@ export default function ForgotPassword() {
 
   return (
     <div className="login-wrap">
+      <TemaBoton />
       <div className="login-card">
         <div className="brand">
           <h1>PROSANE</h1>

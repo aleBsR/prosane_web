@@ -27,7 +27,7 @@ export default function ConfigPassword() {
       setNw('');
       setConfirm('');
       toast.push('ok', 'Contraseña actualizada');
-      nav('/usuario/configuracion');
+      nav('/usuario/configuracion', { replace: true });
     } catch (e) {
       toast.push('error', apiErrorMessage(e, 'No se pudo cambiar'));
     } finally {

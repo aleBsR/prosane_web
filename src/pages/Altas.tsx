@@ -4,19 +4,38 @@ import { v1Api, apiErrorMessage } from '../api/client';
 import { AppButton, AppCard, EmptyState, Field, PageHeader, SelectInput, TextInput, useToast } from '../components/ui';
 
 // Alta directa de escuela (ruta /escuelas/nuevo, espejo de crearEscuela).
+// Permite asociar opcionalmente un usuario escuela NUEVO (email). No se
+// permite vincular uno existente: todos los usuarios escuela ya están
+// asociados a una escuela y moverlos desde acá los sacaría de la anterior.
 export function EscuelaCreate() {
   const nav = useNavigate();
   const toast = useToast();
   const [nombre, setNombre] = useState('');
   const [cue, setCue] = useState('');
+  const [asociarUsuario, setAsociarUsuario] = useState(false);
+  const [email, setEmail] = useState('');
+  const [email2, setEmail2] = useState('');
   const [saving, setSaving] = useState(false);
 
   async function crear() {
     if (!nombre.trim()) return toast.push('error', 'El nombre es obligatorio');
+    if (asociarUsuario) {
+      if (!email.includes('@')) return toast.push('error', 'Email inválido');
+      if (email.trim().toLowerCase() !== email2.trim().toLowerCase()) return toast.push('error', 'Los correos no coinciden');
+    }
     setSaving(true);
     try {
       const { data } = await v1Api.post('/escuelas/', { nombre: nombre.trim(), ...(cue ? { cue } : {}) });
-      toast.push('ok', 'Escuela creada');
+      if (asociarUsuario) {
+        try {
+          await v1Api.post('/usuarios/escuelas/', { email: email.trim(), escuela: data.id });
+          toast.push('ok', 'Escuela creada. Usuario escuela creado — contraseña temporal por mail (72h).');
+        } catch (e2) {
+          toast.push('error', `Escuela creada, pero no se pudo crear el usuario: ${apiErrorMessage(e2)}. Asocialo desde Usuarios.`);
+        }
+      } else {
+        toast.push('ok', 'Escuela creada');
+      }
       // El formulario se reemplaza por el listado y el detalle se apila
       // encima: el "atrás" del navegador vuelve siempre al listado,
       // venga de donde venga (listado o menú de inicio).
@@ -35,6 +54,17 @@ export function EscuelaCreate() {
       <AppCard>
         <Field label="Nombre *"><TextInput value={nombre} onChange={(e) => setNombre(e.target.value)} /></Field>
         <Field label="CUE (si se conoce)"><TextInput value={cue} onChange={(e) => setCue(e.target.value)} /></Field>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, margin: '8px 0' }}>
+          <input type="checkbox" checked={asociarUsuario} onChange={(e) => setAsociarUsuario(e.target.checked)} />
+          Crear usuario escuela para esta escuela
+        </label>
+        {asociarUsuario && (
+          <>
+            <Field label="Email *"><TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
+            <Field label="Repetir email *"><TextInput type="email" value={email2} onChange={(e) => setEmail2(e.target.value)} /></Field>
+            <div className="info-box ok">Se enviará contraseña temporal por mail (72h).</div>
+          </>
+        )}
         <AppButton label="Crear escuela" loading={saving} onClick={crear} />
       </AppCard>
     </div>

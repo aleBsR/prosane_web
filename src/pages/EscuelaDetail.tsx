@@ -23,6 +23,7 @@ export default function EscuelaDetail() {
   const puedeEditar = can('editarEscuela');
   const puedeEliminar = can('eliminarEscuela');
   const puedeVerAlumnos = can('verAlumnosEscuela');
+  const puedeGestionarUsuariosEscuela = can('gestionarUsuariosEscuela');
 
   async function cargar() {
     try {
@@ -137,14 +138,16 @@ export default function EscuelaDetail() {
         title={escuela.nombre}
         bannerIcon="school"
         bannerChips={chips}
-        menuEntries={[
-          ...(puedeEditar ? [{ value: 'editar', label: 'Editar', icon: 'edit' }] : []),
-          ...(puedeEliminar ? [{ value: 'eliminar', label: 'Eliminar', icon: 'delete', danger: true }] : []),
-        ]}
-        onMenuSelected={(v) => {
-          if (v === 'editar') abrirEdicion();
-          if (v === 'eliminar') setConfirmDel(true);
-        }}
+          menuEntries={[
+            ...(puedeEditar ? [{ value: 'editar', label: 'Editar', icon: 'edit' }] : []),
+            ...(puedeGestionarUsuariosEscuela ? [{ value: 'usuarios', label: 'Usuarios escuela', icon: 'groups' }] : []),
+            ...(puedeEliminar ? [{ value: 'eliminar', label: 'Eliminar', icon: 'delete', danger: true }] : []),
+          ]}
+          onMenuSelected={(v) => {
+            if (v === 'editar') abrirEdicion();
+            if (v === 'usuarios') nav(`/usuarios-escuela?escuela=${escuelaId}`);
+            if (v === 'eliminar') setConfirmDel(true);
+          }}
         body={
           <>
             {dato('CUE', escuela.cue)}

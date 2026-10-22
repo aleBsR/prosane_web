@@ -109,6 +109,7 @@ export default function OperativoDetail() {
     } catch {
       setDisponibles([]);
     }
+    setAsig({ profesional: '', rol: 'medico' });
     setShowAsignar(true);
   }
 
@@ -184,7 +185,15 @@ export default function OperativoDetail() {
     setImportando(true);
     try {
       const { data } = await v1Api.post(`/operativos/${id}/alumnos/importar-csv/`, fd);
-      toast.push('ok', `Nómina importada: ${data.creados ?? '?'} creados`);
+      const creados = data?.creados ?? 0;
+      const duplicados = data?.duplicados ?? 0;
+      const errores: string[] = Array.isArray(data?.errores) ? data.errores : [];
+      const partes: string[] = [];
+      if (creados > 0) partes.push(`${creados} creados`);
+      if (duplicados > 0) partes.push(`${duplicados} duplicados`);
+      const msg = partes.length ? partes.join(' · ') : 'Sin cambios';
+      if (errores.length) toast.push('error', `${msg}. Errores: ${errores.join('; ')}`);
+      else toast.push('ok', `Nómina importada: ${msg}`);
       cargar();
     } catch (e) {
       toast.push('error', apiErrorMessage(e, 'No se pudo importar el CSV'));
@@ -310,6 +319,11 @@ export default function OperativoDetail() {
       {estado === 'en_curso' && (
         <AppCard>
           <h3>{completos}/{total} alumnos completos</h3>
+          {Number(completitud?.alumnos_sin_tutor ?? 0) > 0 && (
+            <div className="info-box" style={{ border: '1px solid var(--error)', marginTop: 8 }}>
+              ⚠️ {completitud.alumnos_sin_tutor} alumno(s) sin datos del tutor (responsable). No cerrar el operativo hasta cargarlos.
+            </div>
+          )}
           {!puedeFinalizar && <div className="hint">Faltan evaluaciones para finalizar</div>}
         </AppCard>
       )}
@@ -474,7 +488,14 @@ export default function OperativoDetail() {
       {showAsignar && (
         <Modal title="Asignar profesional" saveLabel="Asignar" onSave={asignar} onCancel={() => setShowAsignar(false)}>
           <Field label="Profesional">
-            <SelectInput value={asig.profesional} onChange={(e) => setAsig({ ...asig, profesional: e.target.value })}>
+            <SelectInput value={asig.profesional} onChange={(e) => {
+              const p = disponibles.find((x: any) => x.id === e.target.value);
+              const roles = Array.isArray(p?.roles) ? p.roles : [];
+              const rol = roles.includes('odontologo') && !roles.includes('medico')
+                ? 'odontologo'
+                : 'medico';
+              setAsig({ profesional: e.target.value, rol });
+            }}>
               <option value="">Elegí…</option>
               {disponibles.map((p: any) => (
                 <option key={p.id} value={p.id}>
@@ -484,12 +505,27 @@ export default function OperativoDetail() {
             </SelectInput>
           </Field>
           <Field label="Rol en el operativo">
-            <SelectInput value={asig.rol} onChange={(e) => setAsig({ ...asig, rol: e.target.value })}>
-              <option value="medico">Médico</option>
-              <option value="odontologo">Odontólogo</option>
-              <option value="administrativo">Administrativo</option>
-            </SelectInput>
+            {(() => {
+              const p = disponibles.find((x: any) => x.id === asig.profesional);
+              const roles = Array.isArray(p?.roles) ? p.roles : [];
+              const editable = roles.includes('medico') && roles.includes('odontologo');
+              if (!editable) {
+                return <div style={{ padding: '8px 0', fontWeight: 600 }}>{asig.rol === 'odontologo' ? 'Odontólogo' : 'Médico'}</div>;
+              }
+              return (
+                <SelectInput value={asig.rol} onChange={(e) => setAsig({ ...asig, rol: e.target.value })}>
+                  <option value="medico">Médico</option>
+                  <option value="odontologo">Odontólogo</option>
+                </SelectInput>
+              );
+            })()}
           </Field>
+          {(() => {
+            const p = disponibles.find((x: any) => x.id === asig.profesional);
+            const roles = Array.isArray(p?.roles) ? p.roles : [];
+            if (roles.length <= 1) return null;
+            return <div className="info-box ok">El profesional tiene ambos roles: podés elegir cuál usar en este operativo.</div>;
+          })()}
         </Modal>
       )}
     </div>

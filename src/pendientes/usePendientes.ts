@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { v1Api } from '../api/client';
+import { authApi, v1Api } from '../api/client';
 
 export interface Pendiente {
   titulo: string;
@@ -41,6 +41,22 @@ export function usePendientes(can: (p: string) => boolean) {
     }
     const puedeVer = can('verOperativo');
     const esProfesional = can('cargarEvaluacionMedica') || can('cargarEvaluacionOdontologica');
+    // Datos profesionales incompletos (alta manual sin REFEPS): el backend
+    // informa perfil_profesional_completo:false solo en ese caso. Al guardar
+    // en Datos personales, el backend sincroniza Profesional.
+    try {
+      const { data } = await authApi.get('/me/');
+      if (data && data.user && data.user.perfil_profesional_completo === false) {
+        found.push({
+          titulo: 'Completá tus datos profesionales',
+          subtitulo: 'Cargá tu nombre y apellido para que figuren en la planilla',
+          ruta: '/usuario/configuracion/datos',
+          icono: 'badge',
+        });
+      }
+    } catch {
+      /* se oculta */
+    }
     if (puedeVer || esProfesional) {
       try {
         const { data } = await v1Api.get('/operativos/');

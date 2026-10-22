@@ -13,7 +13,7 @@ export default function MiEscuela() {
   const [escuela, setEscuela] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState(false);
-  const [form, setForm] = useState({ nombre: '', cue: '', sector_gestion: '', modalidad_educativa: '', telefono: '', localidad: '' });
+  const [form, setForm] = useState({ nombre: '', cue: '', sector_gestion: '', modalidad_educativa: '', telefono: '', localidad: '', intercultural_bilingue: false, plurigrado_rural: false });
   const [saving, setSaving] = useState(false);
 
   async function cargar() {
@@ -28,6 +28,8 @@ export default function MiEscuela() {
         modalidad_educativa: data.modalidad_educativa ?? '',
         telefono: data.telefono ?? '',
         localidad: data.localidad ?? data.domicilio?.localidad ?? '',
+        intercultural_bilingue: !!data.intercultural_bilingue,
+        plurigrado_rural: !!data.plurigrado_rural,
       });
     } catch (e) {
       toast.push('error', apiErrorMessage(e, 'No se pudo cargar tu escuela'));
@@ -50,6 +52,8 @@ export default function MiEscuela() {
         sector_gestion: form.sector_gestion || undefined,
         modalidad_educativa: form.modalidad_educativa || undefined,
         telefono: form.telefono || undefined,
+        intercultural_bilingue: form.intercultural_bilingue,
+        plurigrado_rural: form.plurigrado_rural,
         ...(form.localidad ? { domicilio: { localidad: form.localidad } } : {}),
       });
       toast.push('ok', '¡Datos de la escuela actualizados!');
@@ -99,6 +103,8 @@ export default function MiEscuela() {
         title={titulo}
         subtitle={subtitulo}
         bannerIcon="school"
+        menuEntries={[{ value: 'editar', label: 'Editar datos', icon: 'edit' }]}
+        onMenuSelected={(v) => { if (v === 'editar') setEditando(true); }}
         bannerChips={[
           `${cursos.length} curso${cursos.length === 1 ? '' : 's'}`,
           ...(esPlurigrado ? ['Plurigrado rural'] : []),
@@ -134,8 +140,17 @@ export default function MiEscuela() {
             </SelectInput>
           </Field>
           <Field label="Teléfono"><TextInput value={form.telefono} onChange={(e) => setForm({ ...form, telefono: e.target.value })} /></Field>
-          <Field label="Localidad"><TextInput value={form.localidad} onChange={(e) => setForm({ ...form, localidad: e.target.value })} /></Field>
-        </Modal>
+           <Field label="Localidad"><TextInput value={form.localidad} onChange={(e) => setForm({ ...form, localidad: e.target.value })} /></Field>
+           <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
+             <input type="checkbox" checked={form.intercultural_bilingue} onChange={(e) => setForm({ ...form, intercultural_bilingue: e.target.checked })} />
+             Intercultural bilingüe
+           </label>
+           <div style={{ height: 8 }} />
+           <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
+             <input type="checkbox" checked={form.plurigrado_rural} onChange={(e) => setForm({ ...form, plurigrado_rural: e.target.checked })} />
+             Plurigrado rural
+           </label>
+         </Modal>
       )}
     </div>
   );

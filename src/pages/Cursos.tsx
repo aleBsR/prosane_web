@@ -36,8 +36,12 @@ export default function Cursos() {
     setEdit(c);
     setForm(
       c === 'nuevo'
-        ? { grado: '', division: '', ciclo: '' }
-        : { grado: c.sala_grado_anio ?? '', division: c.division ?? '', ciclo: String(c.ciclo_lectivo ?? '') },
+        ? { grado: '', division: '', ciclo: String(new Date().getFullYear()) }
+        : {
+            grado: c.sala_grado_anio ?? '',
+            division: c.division ?? '',
+            ciclo: String(c.ciclo_lectivo ?? new Date().getFullYear()),
+          },
     );
   }
 

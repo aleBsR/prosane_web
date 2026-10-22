@@ -144,9 +144,9 @@ export default function Profesionales() {
               <option value="odontologo">Odontólogo</option>
             </SelectInput>
           </Field>
-          <Field label="Matrícula *">
-            <div style={{ display: 'flex', gap: 8 }}>
-              <div style={{ flex: 1 }}>
+          <Field label="DNI *" hint="Se antepone 5410 automáticamente (código REFEPS nacional)">
+            <div className="input-btn-row">
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <TextInput value={form.matricula} onChange={(e) => setForm({ ...form, matricula: e.target.value })} />
               </div>
               <AppButton label={validando ? '…' : 'Validar'} disabled={!form.matricula.trim()} onClick={validarMatricula} />

@@ -15,6 +15,14 @@
       rel="stylesheet"
     />
     <title>PROSANE — Salud Escolar Salta</title>
+    <script>
+      // Aplica el tema guardado antes de que React monte (evita flash en /login).
+      try {
+        var t = localStorage.getItem('prosane-tema');
+        var dark = t === 'oscuro' || (t === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (dark) document.documentElement.dataset.theme = 'dark';
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

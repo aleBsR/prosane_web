@@ -58,6 +58,7 @@ export default function SeccionEscuela() {
     try {
       await v1Api.patch(`/operativos/${opId}/alumnos/${alumnoId}/seccion-escuela/`, f);
       toast.push('ok', 'Sección escuela guardada ✓ (E)');
+      nav(`/operativos/${opId}`, { replace: true });
       nav(`/operativos/${opId}/alumnos/${alumnoId}`);
     } catch (e) {
       toast.push('error', apiErrorMessage(e, 'No se pudo guardar'));

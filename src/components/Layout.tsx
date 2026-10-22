@@ -2,6 +2,7 @@ import { Component, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { useTema } from '../theme/TemaContext';
 import { usePendientes } from '../pendientes/usePendientes';
 import { MIcon } from './ui';
 
@@ -46,18 +47,12 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 export default function Layout() {
   const { usuario, logout, can } = useAuth();
   const { items: pendientes } = usePendientes(can);
+  const { oscuro: temaOscuro, alternar } = useTema();
   const nav = useNavigate();
   const { pathname } = useLocation();
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [legalAbierto, setLegalAbierto] = useState(false);
   const [confirmSalir, setConfirmSalir] = useState(false);
-  // Tema claro/oscuro: se guarda en localStorage; por defecto el del sistema.
-  const [temaOscuro, setTemaOscuro] = useState(() => {
-    const guardado = localStorage.getItem('prosane-tema');
-    if (guardado === 'oscuro') return true;
-    if (guardado === 'claro') return false;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
   const menuRef = useRef<HTMLDivElement>(null);
 
   const inicial = (usuario?.nombre.trim().charAt(0) || '?').toUpperCase();
@@ -103,13 +98,6 @@ export default function Layout() {
     return () => document.removeEventListener('keydown', onKey);
   }, [legalAbierto]);
 
-  // Aplica el tema al <html> y lo persiste.
-  useEffect(() => {
-    if (temaOscuro) document.documentElement.dataset.theme = 'dark';
-    else delete document.documentElement.dataset.theme;
-    localStorage.setItem('prosane-tema', temaOscuro ? 'oscuro' : 'claro');
-  }, [temaOscuro]);
-
   return (
     <div className="gradient-page">
       <header className="topbar">
@@ -131,7 +119,7 @@ export default function Layout() {
               className="theme-btn"
               title={temaOscuro ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
               aria-label={temaOscuro ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-              onClick={() => setTemaOscuro((v) => !v)}
+              onClick={alternar}
             >
               <MIcon name={temaOscuro ? 'light_mode' : 'dark_mode'} size={20} />
             </button>
